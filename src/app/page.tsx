@@ -3,7 +3,6 @@
 import { useEffect } from 'react'
 import VMixConnectionCompact from '@/components/VMixConnectionCompact'
 import ShowPlanner from '@/components/ShowPlanner'
-import ConsoleLog from '@/components/ConsoleLog'
 import { useVMixStore } from '@/store/vmix-store'
 import { automationEngine } from '@/services/automation-engine'
 
@@ -44,46 +43,27 @@ export default function Home() {
   }, [isRunning])
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-6">
-        {/* Header con conexión compacta */}
-        <div className="mb-8">
-          <div className="flex justify-between items-start">
+    <div className="h-screen bg-background flex flex-col">
+      {/* Header compacto */}
+      <div className="flex-shrink-0 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-4xl font-bold mb-2">
+              <h1 className="text-2xl font-bold">
                 vMix Automation Dashboard
               </h1>
-              <p className="text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Automatiza y controla tu show de vMix con precisión
               </p>
             </div>
             <VMixConnectionCompact />
           </div>
         </div>
+      </div>
 
-        {/* Panel principal vertical */}
-        <div className="space-y-6">
-          <ShowPlanner />
-          <ConsoleLog />
-        </div>
-
-        {/* Footer */}
-        <div className="mt-12 text-center text-sm text-muted-foreground">
-          <p>
-            Desarrollado para automatizar shows de vMix usando la API oficial
-          </p>
-          <p className="mt-1">
-            Documentación de la API: 
-            <a 
-              href="https://vmixapi.com/" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-primary hover:underline ml-1"
-            >
-              vmixapi.com
-            </a>
-          </p>
-        </div>
+      {/* Panel principal - Solo rundown */}
+      <div className="flex-1 overflow-hidden">
+        <ShowPlanner />
       </div>
     </div>
   )

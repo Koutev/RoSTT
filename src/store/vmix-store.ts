@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { BlockTemplate } from '@/data/block-templates'
 
 export interface VMixConnection {
   ip: string
@@ -42,6 +43,17 @@ interface VMixStore {
   // Rundown grid (filas/columnas)
   rundown: RundownGrid
   
+  // Plantillas personalizadas
+  customTemplates: BlockTemplate[]
+  
+  // Horarios del show
+  showStartTime: string
+  showEndTime: string
+  
+  // Estado del show en ejecución
+  currentBlockIndex: number
+  showStatus: 'idle' | 'running' | 'paused' | 'completed'
+  
   // Actions
   setConnection: (ip: string, port: number) => void
   setConnected: (connected: boolean) => void
@@ -58,8 +70,26 @@ interface VMixStore {
   addRowFromRunOfShow: (step: RunOfShowStep) => void
   updateRow: (rowId: string, update: Partial<RundownRow>) => void
   removeRow: (rowId: string) => void
-  reorderRows: (rows: RundownRow[]) => void
+  reorderRows: (oldIndex: number, newIndex: number) => void
   executeRow: (rowId: string) => void
+
+  // Acciones plantillas personalizadas
+  addCustomTemplate: (template: BlockTemplate) => void
+  removeCustomTemplate: (templateId: string) => void
+  updateCustomTemplate: (templateId: string, updates: Partial<BlockTemplate>) => void
+
+  // Acciones horarios del show
+  setShowStartTime: (time: string) => void
+  setShowEndTime: (time: string) => void
+
+  // Acciones estado del show
+  setCurrentBlockIndex: (index: number) => void
+  setShowStatus: (status: 'idle' | 'running' | 'paused' | 'completed') => void
+  startShow: () => void
+  pauseShow: () => void
+  resumeShow: () => void
+  stopShow: () => void
+  nextBlock: () => void
 }
 
 export interface RundownColumn {
@@ -103,6 +133,27 @@ export interface RundownGrid {
   rows: RundownRow[]
 }
 
+// Función para cargar plantillas personalizadas desde localStorage
+const loadCustomTemplates = (): BlockTemplate[] => {
+  if (typeof window === 'undefined') return []
+  try {
+    const stored = localStorage.getItem('vmix-custom-templates')
+    return stored ? JSON.parse(stored) : []
+  } catch {
+    return []
+  }
+}
+
+// Función para guardar plantillas personalizadas en localStorage
+const saveCustomTemplates = (templates: BlockTemplate[]) => {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem('vmix-custom-templates', JSON.stringify(templates))
+  } catch {
+    // Silently fail if localStorage is not available
+  }
+}
+
 export const useVMixStore = create<VMixStore>((set, get) => ({
   connection: {
     ip: '',
@@ -113,6 +164,11 @@ export const useVMixStore = create<VMixStore>((set, get) => ({
   consoleLogs: [],
   isRunning: false,
   currentStepIndex: -1,
+  customTemplates: loadCustomTemplates(),
+  showStartTime: '20:00',
+  showEndTime: '22:00',
+  currentBlockIndex: -1,
+  showStatus: 'idle',
   rundown: {
     columns: [
       { id: 'col-time', title: 'Tiempo Total', type: 'time' as const },
@@ -204,12 +260,18 @@ export const useVMixStore = create<VMixStore>((set, get) => ({
     }
   })),
 
-  reorderRows: (rows: RundownRow[]) => set(state => ({
-    rundown: {
-      ...state.rundown,
-      rows: rows.map((row, index) => ({ ...row, order: index }))
+  reorderRows: (oldIndex: number, newIndex: number) => set(state => {
+    const newRows = [...state.rundown.rows]
+    const [movedRow] = newRows.splice(oldIndex, 1)
+    newRows.splice(newIndex, 0, movedRow)
+    
+    return {
+      rundown: {
+        ...state.rundown,
+        rows: newRows.map((row, index) => ({ ...row, order: index }))
+      }
     }
-  })),
+  }),
 
   executeRow: (rowId: string) => {
     const state = get()
@@ -221,5 +283,100 @@ export const useVMixStore = create<VMixStore>((set, get) => ({
       })
       // Aquí se ejecutarían las acciones de la fila
     }
-  }
+  },
+
+  // Acciones plantillas personalizadas
+  addCustomTemplate: (template: BlockTemplate) => set(state => {
+    const newTemplates = [...state.customTemplates, template]
+    saveCustomTemplates(newTemplates)
+    return { customTemplates: newTemplates }
+  }),
+
+  removeCustomTemplate: (templateId: string) => set(state => {
+    const newTemplates = state.customTemplates.filter(t => t.id !== templateId)
+    saveCustomTemplates(newTemplates)
+    return { customTemplates: newTemplates }
+  }),
+
+  updateCustomTemplate: (templateId: string, updates: Partial<BlockTemplate>) => set(state => {
+    const newTemplates = state.customTemplates.map(t => 
+      t.id === templateId ? { ...t, ...updates } : t
+    )
+    saveCustomTemplates(newTemplates)
+    return { customTemplates: newTemplates }
+  }),
+
+  // Acciones horarios del show
+  setShowStartTime: (time: string) => set({ showStartTime: time }),
+
+  setShowEndTime: (time: string) => set({ showEndTime: time }),
+
+  // Acciones estado del show
+  setCurrentBlockIndex: (index: number) => set({ currentBlockIndex: index }),
+
+  setShowStatus: (status: 'idle' | 'running' | 'paused' | 'completed') => set({ showStatus: status }),
+
+  startShow: () => set(state => {
+    if (state.rundown.rows.length === 0) return state
+    return {
+      showStatus: 'running',
+      currentBlockIndex: 0
+    }
+  }),
+
+  pauseShow: () => set({ showStatus: 'paused' }),
+
+  resumeShow: () => set({ showStatus: 'running' }),
+
+  stopShow: () => set({
+    showStatus: 'idle',
+    currentBlockIndex: -1
+  }),
+
+  nextBlock: () => set(state => {
+    if (state.currentBlockIndex < state.rundown.rows.length - 1) {
+      return {
+        currentBlockIndex: state.currentBlockIndex + 1
+      }
+    } else {
+      return {
+        showStatus: 'completed',
+        currentBlockIndex: -1
+      }
+    }
+  })
 }))
+
+// Funciones utilitarias para manejo de tiempo (formato 24 horas)
+export function timeToMinutes(time: string): number {
+  const [hours, minutes] = time.split(':').map(Number)
+  return hours * 60 + minutes
+}
+
+export function minutesToTime(minutes: number): string {
+  // Manejar el paso de medianoche (más de 24 horas)
+  const totalMinutes = minutes % (24 * 60) // Limitar a 24 horas
+  const hours = Math.floor(totalMinutes / 60)
+  const mins = totalMinutes % 60
+  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`
+}
+
+export function calculateEndTime(startTime: string, totalDuration: string): string {
+  // Convertir startTime (HH:MM) a segundos totales
+  const [startHours, startMinutes] = startTime.split(':').map(Number)
+  const startTotalSeconds = startHours * 3600 + startMinutes * 60
+  
+  // Convertir totalDuration (MM:SS) a segundos totales
+  const [durationMinutes, durationSeconds] = totalDuration.split(':').map(Number)
+  const durationTotalSeconds = durationMinutes * 60 + durationSeconds
+  
+  // Calcular tiempo final en segundos
+  const endTotalSeconds = startTotalSeconds + durationTotalSeconds
+  
+  // Convertir de vuelta a HH:MM:SS
+  const hours = Math.floor(endTotalSeconds / 3600) % 24 // Limitar a 24 horas
+  const minutes = Math.floor((endTotalSeconds % 3600) / 60)
+  const seconds = endTotalSeconds % 60
+  
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+}

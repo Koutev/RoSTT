@@ -1,38 +1,75 @@
 'use client'
 
-import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { useVMixStore, RunOfShowStep, VMixAction } from '@/store/vmix-store'
-import { Plus, Trash2, Play, ArrowUp, ArrowDown, Settings } from 'lucide-react'
+import { useVMixStore, RunOfShowStep, VMixAction, calculateEndTime } from '@/store/vmix-store'
+import { Plus, Trash2, Play, ArrowUp, ArrowDown, Settings, GripVertical } from 'lucide-react'
 import { automationEngine } from '@/services/automation-engine'
 import ActionEditor from '@/components/ActionEditor'
 import BlockEditor from '@/components/BlockEditor'
 import CueFieldEditor from '@/components/CueFieldEditor'
-import BlockCreator from '@/components/BlockCreator'
+import BlockCreatorCompact from '@/components/BlockCreatorCompact'
+import Timeline from '@/components/Timeline'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import {
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 export default function ShowPlanner() {
-  const { rundown, addRowFromRunOfShow, reorderRows, updateRow, removeRow, addConsoleLog } = useVMixStore()
+  const { rundown, addRowFromRunOfShow, reorderRows, updateRow, removeRow, addConsoleLog, showStartTime, showEndTime, setShowStartTime, setShowEndTime, showStatus, currentBlockIndex } = useVMixStore()
   const [editingBlock, setEditingBlock] = useState<string | null>(null)
   const [editingCueField, setEditingCueField] = useState<{ rowId: string; fieldId: string } | null>(null)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
 
   const handleAddBlock = (step: RunOfShowStep) => {
     addRowFromRunOfShow(step)
   }
 
-  const handleMoveRow = (rowId: string, direction: 'up' | 'down') => {
-    const currentIndex = rundown.rows.findIndex(r => r.id === rowId)
-    if (currentIndex === -1) return
-    const newRows = [...rundown.rows]
-    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
-    if (targetIndex >= 0 && targetIndex < newRows.length) {
-      [newRows[currentIndex], newRows[targetIndex]] = [newRows[targetIndex], newRows[currentIndex]]
-      reorderRows(newRows)
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (active.id !== over?.id) {
+      const oldIndex = rundown.rows.findIndex((row) => row.id === active.id)
+      const newIndex = rundown.rows.findIndex((row) => row.id === over?.id)
+
+      reorderRows(oldIndex, newIndex)
+      addConsoleLog({
+        message: `Bloque movido de posición ${oldIndex + 1} a ${newIndex + 1}`,
+        type: 'info'
+      })
     }
   }
+
+  // Recalcular horario de finalización cuando cambie la duración total
+  useEffect(() => {
+    const totalDuration = calcTotalDuration(rundown.rows)
+    const calculatedEndTime = calculateEndTime(showStartTime, totalDuration)
+    setShowEndTime(calculatedEndTime)
+  }, [rundown.rows, showStartTime, setShowEndTime])
 
   const executeRow = async (rowId: string) => {
     const row = rundown.rows.find(r => r.id === rowId)
@@ -41,186 +78,134 @@ export default function ShowPlanner() {
     for (const action of row.actions) {
       await automationEngine.executeAction(action)
     }
+    addConsoleLog({ message: `Bloque completado: ${row.title}`, type: 'success' })
   }
 
   return (
-    <div className="grid grid-cols-1 gap-6">
-
-      {/* Tabla vertical del rundown */}
-      <Card>
-        <CardHeader>
+    <div className="h-full flex flex-col bg-background">
+      {/* Header del rundown */}
+      <div className="flex-shrink-0 bg-muted/30 border-b">
+        <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <CardTitle>Rundown</CardTitle>
-            <BlockCreator onAddBlock={handleAddBlock} />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-auto">
-            {/* Totalizador de tiempo */}
-            <div className="mb-3 text-sm text-muted-foreground">
-              Tiempo total del show: {calcTotalDuration(rundown.rows)}
+            <div>
+              <h1 className="text-2xl font-bold">Rundown</h1>
+              <p className="text-muted-foreground">Planifica tu show paso a paso</p>
             </div>
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th className="border px-2 py-1 w-8 text-left">#</th>
-                  <th className="border px-2 py-1 text-left">Bloque</th>
-                  <th className="border px-2 py-1 text-left">Tiempo Total</th>
-                  <th className="border px-2 py-1 text-left">Duración</th>
-                  <th className="border px-2 py-1 text-left">Notas</th>
-                  <th className="border px-2 py-1 text-left w-32">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rundown.rows.length === 0 ? (
+            
+            <div className="flex items-center gap-6">
+              <div className="text-center">
+                <div className="text-sm text-muted-foreground">Duración Total</div>
+                <div className="text-lg font-bold text-primary">{calcTotalDuration(rundown.rows)}</div>
+              </div>
+              
+              <div className="text-center">
+                <div className="text-sm text-muted-foreground">Inicio</div>
+                <Input
+                  type="time"
+                  value={showStartTime}
+                  onChange={(e) => setShowStartTime(e.target.value)}
+                  className="w-24 text-center"
+                />
+              </div>
+              
+              <div className="text-center">
+                <div className="text-sm text-muted-foreground">Finalización</div>
+                <div className="text-lg font-bold text-primary">{showEndTime}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Línea de tiempo con cuenta atrás */}
+      <Timeline />
+
+      {/* Tabla del rundown */}
+      <div className="flex-1 overflow-auto">
+        <div className="container mx-auto px-6 py-4">
+          <div className="relative">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <table className="w-full border-collapse">
+                <thead>
                   <tr>
-                    <td colSpan={6} className="border px-2 py-8 text-center text-muted-foreground">Aún no hay filas. Crea tu primer bloque arriba.</td>
+                    <th className="border px-2 py-1 w-8 text-left">#</th>
+                    <th className="border px-2 py-1 text-left">Bloque</th>
+                    <th className="border px-2 py-1 text-left">Tiempo Total</th>
+                    <th className="border px-2 py-1 text-left">Duración</th>
+                    <th className="border px-2 py-1 text-left">Notas</th>
+                    <th className="border px-2 py-1 text-left w-32">Acciones</th>
                   </tr>
-                ) : (
-                  rundown.rows.map((row, index) => (
-                    <tr key={row.id} className="hover:bg-muted/50">
-                      <td className="border px-2 py-1">
-                        <div className="flex items-center gap-1">
-                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleMoveRow(row.id, 'up')} disabled={index === 0}>
-                            <ArrowUp className="h-3 w-3" />
-                          </Button>
-                          <span className="text-sm font-medium">{index + 1}</span>
-                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleMoveRow(row.id, 'down')} disabled={index === rundown.rows.length - 1}>
-                            <ArrowDown className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </td>
-                      <td className="border px-2 py-1">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <Input 
-                              value={row.title} 
-                              onChange={(e) => updateRow(row.id, { title: e.target.value })} 
-                              className="font-medium flex-1"
-                              style={{
-                                backgroundColor: row.style?.backgroundColor,
-                                color: row.style?.textColor,
-                                borderColor: row.style?.borderColor,
-                                borderWidth: row.style?.borderWidth,
-                                borderRadius: row.style?.borderRadius
-                              }}
-                            />
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setEditingBlock(row.id)}
-                            >
-                              <Settings className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          
-                          {row.description && (
-                            <p className="text-xs text-muted-foreground">{row.description}</p>
-                          )}
-                          
-                          {/* Campos personalizados */}
-                          {row.customFields && row.customFields.length > 0 && (
-                            <div className="space-y-1">
-                              {row.customFields.map((field) => (
-                                <div key={field.id} className="flex items-center gap-2">
-                                  <Input
-                                    value={field.value}
-                                    onChange={(e) => {
-                                      const updatedFields = row.customFields!.map(f =>
-                                        f.id === field.id ? { ...f, value: e.target.value } : f
-                                      )
-                                      updateRow(row.id, { customFields: updatedFields })
-                                    }}
-                                    placeholder={field.placeholder || field.label}
-                                    className="text-xs"
-                                  />
-                                  {field.type === 'cue' && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => setEditingCueField({ rowId: row.id, fieldId: field.id })}
-                                      className="text-xs"
-                                    >
-                                      CUE
-                                    </Button>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          
-                          <div className="flex items-center gap-2">
-                            {row.customFields && row.customFields.length > 0 && (
-                              <Badge variant="outline" className="text-xs">
-                                {row.customFields.length} campos
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="border px-2 py-1 text-sm text-muted-foreground">
-                        {calcTotalDuration(rundown.rows.slice(0, index + 1))}
-                      </td>
-                      <td className="border px-2 py-1">
-                        <Input value={(row as any).duration || ''} onChange={(e) => updateRow(row.id, { duration: e.target.value } as any)} placeholder="2:00" />
-                        <p className="text-[10px] text-muted-foreground mt-1">mm:ss o hh:mm:ss</p>
-                      </td>
-                      <td className="border px-2 py-1">
-                        <Input value={row.notes || ''} onChange={(e) => updateRow(row.id, { notes: e.target.value })} placeholder="Notas..." />
-                      </td>
-                      <td className="border px-2 py-1">
-                        <div className="space-y-2">
-                          {/* Editor de acciones */}
-                          <ActionEditor
-                            actions={row.actions}
-                            onActionsChange={(actions) => updateRow(row.id, { actions })}
-                            onExecuteAction={async (action) => {
-                              addConsoleLog({ message: `Probando acción: ${action.action}`, type: 'info' })
-                              await automationEngine.executeAction(action)
-                            }}
-                            title={row.title}
-                          />
-                          
-                          {/* Botones de control */}
-                          <div className="flex gap-1">
-                            <Button size="sm" onClick={() => executeRow(row.id)} className="flex items-center gap-1">
-                              <Play className="h-3 w-3" /> Ejecutar
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => removeRow(row.id)}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                </thead>
+                <tbody>
+                  {rundown.rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="border px-2 py-8 text-center text-muted-foreground">
+                        <div className="relative overflow-visible">
+                          <div className="space-y-3">
+                            <p>Aún no hay bloques en tu rundown</p>
+                            <BlockCreatorCompact onAddBlock={handleAddBlock} />
                           </div>
                         </div>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    <SortableContext items={rundown.rows.map(row => row.id)} strategy={verticalListSortingStrategy}>
+                      {rundown.rows.map((row, index) => (
+                        <SortableRow
+                          key={row.id}
+                          row={row}
+                          index={index}
+                          currentBlockIndex={currentBlockIndex}
+                          showStatus={showStatus}
+                          onEdit={setEditingBlock}
+                          onRemove={removeRow}
+                          onUpdateRow={updateRow}
+                          onEditCueField={setEditingCueField}
+                        />
+                      ))}
+                      
+                      {/* Fila para agregar más bloques */}
+                      <tr>
+                        <td colSpan={6} className="border px-2 py-4 text-center">
+                          <div className="relative overflow-visible">
+                            <BlockCreatorCompact onAddBlock={handleAddBlock} />
+                          </div>
+                        </td>
+                      </tr>
+                    </SortableContext>
+                  )}
+                </tbody>
+              </table>
+            </DndContext>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Modales */}
       {editingBlock && (
         <BlockEditor
           row={rundown.rows.find(r => r.id === editingBlock)!}
-          onUpdate={(updates) => updateRow(editingBlock, updates)}
           onClose={() => setEditingBlock(null)}
+          onSave={(updates) => {
+            updateRow(editingBlock, updates)
+            setEditingBlock(null)
+          }}
         />
       )}
 
       {editingCueField && (
         <CueFieldEditor
-          field={rundown.rows.find(r => r.id === editingCueField.rowId)?.customFields?.find(f => f.id === editingCueField.fieldId)!}
-          onUpdate={(updates) => {
-            const row = rundown.rows.find(r => r.id === editingCueField.rowId)!
-            const updatedFields = row.customFields?.map(f =>
-              f.id === editingCueField.fieldId ? { ...f, ...updates } : f
-            ) || []
-            updateRow(editingCueField.rowId, { customFields: updatedFields })
-          }}
+          row={rundown.rows.find(r => r.id === editingCueField.rowId)!}
+          fieldId={editingCueField.fieldId}
           onClose={() => setEditingCueField(null)}
+          onSave={(updates) => {
+            updateRow(editingCueField.rowId, updates)
+            setEditingCueField(null)
+          }}
         />
       )}
     </div>
@@ -233,24 +218,179 @@ function calcTotalDuration(rows: { duration?: string }[]): string {
     if (!row.duration) continue
     const parts = row.duration.split(':').map(Number)
     if (parts.length === 3) {
+      // Formato HH:MM:SS
       totalSeconds += parts[0] * 3600 + parts[1] * 60 + parts[2]
     } else if (parts.length === 2) {
+      // Formato MM:SS
       totalSeconds += parts[0] * 60 + parts[1]
     } else if (parts.length === 1) {
+      // Formato SS
       totalSeconds += parts[0]
     }
   }
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  
+  const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
-  if (hours > 0) {
-    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
+  
+  // Siempre mostrar formato MM:SS
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+}
+
+interface SortableRowProps {
+  row: RunOfShowStep
+  index: number
+  currentBlockIndex: number
+  showStatus: string
+  onEdit: (rowId: string) => void
+  onRemove: (rowId: string) => void
+  onUpdateRow: (rowId: string, updates: Partial<RunOfShowStep>) => void
+  onEditCueField: (rowId: string, fieldId: string) => void
+}
+
+function SortableRow({ 
+  row, 
+  index, 
+  currentBlockIndex, 
+  showStatus, 
+  onEdit, 
+  onRemove, 
+  onUpdateRow, 
+  onEditCueField 
+}: SortableRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: row.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
   }
-  return `${pad(minutes)}:${pad(seconds)}`
+
+  const isCurrentBlock = showStatus !== 'idle' && showStatus !== 'completed' && currentBlockIndex === index
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={`hover:bg-muted/50 ${isCurrentBlock ? 'bg-red-100 border-red-500 border-2' : ''} ${isDragging ? 'opacity-50' : ''}`}
+    >
+      <td className="border px-2 py-1">
+        <div className="flex items-center gap-2">
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-200 rounded"
+            title="Arrastrar para reordenar"
+          >
+            <GripVertical className="h-4 w-4 text-gray-500" />
+          </div>
+          <span className="text-sm font-medium text-muted-foreground">
+            {index + 1}
+          </span>
+        </div>
+      </td>
+      <td className="border px-2 py-1">
+        <div className="flex items-center gap-2">
+          <Input 
+            value={row.title} 
+            onChange={(e) => onUpdateRow(row.id, { title: e.target.value })} 
+            className="font-medium flex-1"
+            style={{
+              backgroundColor: row.style?.backgroundColor,
+              color: row.style?.textColor,
+              borderColor: row.style?.borderColor,
+            }}
+          />
+          {isCurrentBlock && (
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+          )}
+        </div>
+      </td>
+      <td className="border px-2 py-1">
+        <span className="text-sm text-muted-foreground">
+          {calcTotalDuration([row])}
+        </span>
+      </td>
+      <td className="border px-2 py-1">
+        <Input 
+          value={row.duration || ''} 
+          onChange={(e) => onUpdateRow(row.id, { duration: e.target.value })} 
+          placeholder="02:00"
+          className="w-20"
+        />
+      </td>
+      <td className="border px-2 py-1">
+        <Textarea 
+          value={row.description || ''} 
+          onChange={(e) => onUpdateRow(row.id, { description: e.target.value })} 
+          placeholder="Notas del bloque..."
+          className="min-h-[60px] resize-none"
+        />
+      </td>
+      <td className="border px-2 py-1">
+        <div className="space-y-2">
+          <div className="flex items-center gap-1 flex-wrap">
+            {row.actions.map((action, actionIndex) => (
+              <Badge key={actionIndex} variant="secondary" className="text-xs">
+                {action.action}
+              </Badge>
+            ))}
+          </div>
+          <div className="flex gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onEditCueField(row.id, 'actions')}
+              className="text-xs h-6 px-2"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Acción
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const row = rundown.rows.find(r => r.id === row.id)
+                if (!row) return
+                addConsoleLog({ message: `Ejecutando bloque: ${row.title}`, type: 'info' })
+                for (const action of row.actions) {
+                  automationEngine.executeAction(action)
+                }
+                addConsoleLog({ message: `Bloque completado: ${row.title}`, type: 'success' })
+              }}
+              className="text-xs h-6 px-2"
+            >
+              <Play className="h-3 w-3 mr-1" />
+              Ejecutar
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onEdit(row.id)}
+              className="h-6 w-6 p-0"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onRemove(row.id)}
+              className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  )
 }
 
 function pad(n: number): string {
   return n.toString().padStart(2, '0')
 }
-
-

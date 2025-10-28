@@ -57,24 +57,65 @@ export interface VMixData {
 
 class VMixAPI {
   private baseURL: string = ''
+  private ip: string = ''
+  private port: number = 8088
+  private useProxy: boolean = false
 
   setConnection(ip: string, port: number) {
-    this.baseURL = `http://${ip}:${port}/api`
+    this.ip = ip
+    this.port = port
+    
+    // Usar proxy HTTPS en producción (Vercel)
+    this.useProxy = typeof window !== 'undefined' && window.location.protocol === 'https:'
+    
+    if (this.useProxy) {
+      this.baseURL = '/api/vmix-proxy'
+    } else {
+      this.baseURL = `http://${ip}:${port}/api`
+    }
   }
 
   async testConnection(): Promise<boolean> {
     try {
-      const response = await axios.get(`${this.baseURL}`, { timeout: 5000 })
+      const url = this.useProxy 
+        ? `${this.baseURL}?ip=${this.ip}&port=${this.port}`
+        : this.baseURL
+        
+      const response = await axios.get(url, { 
+        timeout: 5000,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      })
       return response.status === 200
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error testing vMix connection:', error)
+      
+      // Log específico del tipo de error
+      if (error.code === 'ECONNREFUSED') {
+        console.error('Conexión rechazada - Verificar IP y puerto')
+      } else if (error.code === 'ENOTFOUND') {
+        console.error('IP no encontrada - Verificar dirección IP')
+      } else if (error.code === 'ECONNABORTED') {
+        console.error('Timeout - vMix puede estar ocupado o no responder')
+      } else if (error.response?.status === 403) {
+        console.error('Acceso denegado - Verificar permisos en vMix')
+      } else if (error.response?.status === 404) {
+        console.error('Endpoint no encontrado - Verificar configuración de vMix')
+      }
+      
       return false
     }
   }
 
   async getData(): Promise<VMixData | null> {
     try {
-      const response = await axios.get(`${this.baseURL}`, { timeout: 5000 })
+      const url = this.useProxy 
+        ? `${this.baseURL}?ip=${this.ip}&port=${this.port}`
+        : this.baseURL
+        
+      const response = await axios.get(url, { timeout: 5000 })
       return response.data
     } catch (error) {
       console.error('Error fetching vMix data:', error)
@@ -84,14 +125,21 @@ class VMixAPI {
 
   async sendCommand(action: string, input?: string, value?: string): Promise<boolean> {
     try {
-      let url = `${this.baseURL}?Function=${action}`
+      let url: string
       
-      if (input) {
-        url += `&Input=${input}`
-      }
-      
-      if (value) {
-        url += `&Value=${value}`
+      if (this.useProxy) {
+        const params = new URLSearchParams({
+          ip: this.ip,
+          port: this.port.toString(),
+          Function: action
+        })
+        if (input) params.append('Input', input)
+        if (value) params.append('Value', value)
+        url = `${this.baseURL}?${params.toString()}`
+      } else {
+        url = `${this.baseURL}?Function=${action}`
+        if (input) url += `&Input=${input}`
+        if (value) url += `&Value=${value}`
       }
 
       const response = await axios.get(url, { timeout: 5000 })

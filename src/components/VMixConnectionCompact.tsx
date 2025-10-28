@@ -35,19 +35,42 @@ export default function VMixConnectionCompact() {
       type: 'info'
     })
 
-    const isConnected = await vmixAPI.testConnection()
-    
-    if (isConnected) {
-      setConnected(true)
-      addConsoleLog({
-        message: `Conectado exitosamente a vMix en ${ip}:${portNumber}`,
-        type: 'success'
-      })
-      setIsOpen(false) // Cerrar el menú al conectar
-    } else {
+    try {
+      const isConnected = await vmixAPI.testConnection()
+      
+      if (isConnected) {
+        setConnected(true)
+        addConsoleLog({
+          message: `✅ Conectado exitosamente a vMix en ${ip}:${portNumber}`,
+          type: 'success'
+        })
+        setIsOpen(false)
+      } else {
+        setConnected(false)
+        addConsoleLog({
+          message: `❌ No se pudo conectar a vMix en ${ip}:${portNumber}. Verifica:` +
+            `\n• vMix está ejecutándose` +
+            `\n• Web Controller está habilitado` +
+            `\n• IP y puerto son correctos` +
+            `\n• No hay firewall bloqueando` +
+            `\n• CORS está configurado para dominios externos`,
+          type: 'error'
+        })
+      }
+    } catch (error: any) {
       setConnected(false)
+      let errorMessage = `❌ Error de conexión: ${error.message}`
+      
+      if (error.code === 'ECONNREFUSED') {
+        errorMessage = `❌ Conexión rechazada. Verifica que vMix esté ejecutándose y el puerto ${portNumber} esté abierto.`
+      } else if (error.code === 'ENOTFOUND') {
+        errorMessage = `❌ IP no encontrada. Verifica que ${ip} sea la dirección correcta de vMix.`
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = `❌ Timeout. vMix no responde en ${ip}:${portNumber}. Verifica la conexión de red.`
+      }
+      
       addConsoleLog({
-        message: `No se pudo conectar a vMix en ${ip}:${portNumber}`,
+        message: errorMessage,
         type: 'error'
       })
     }

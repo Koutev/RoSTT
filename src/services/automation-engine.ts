@@ -92,7 +92,7 @@ export class AutomationEngine {
     let allSuccess = true
     for (const action of step.actions) {
       if (action.delay && action.delay > 0) {
-        await new Promise(resolve => setTimeout(resolve, (action.delay || 0) * 1000))
+        await new Promise(resolve => setTimeout(resolve, action.delay * 1000))
       }
       
       const success = await this.executeAction(action)

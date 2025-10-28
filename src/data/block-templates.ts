@@ -19,7 +19,7 @@ export const BLOCK_TEMPLATES: BlockTemplate[] = [
     category: 'Intro',
     step: {
       title: 'STARTING SOON',
-      duration: '5:00',
+      duration: '05:00',
       description: 'Pantalla de espera con música de fondo',
       actions: [
         { id: '1', action: 'Fade', target: 'StartingSoon', value: '', delay: 0 },
@@ -42,7 +42,7 @@ export const BLOCK_TEMPLATES: BlockTemplate[] = [
     category: 'Intro',
     step: {
       title: 'SHOW INTRO',
-      duration: '2:00',
+      duration: '02:00',
       description: 'Intro con logo y música del programa',
       actions: [
         { id: '1', action: 'Cut', target: 'ShowIntro', value: '', delay: 0 },
@@ -66,7 +66,7 @@ export const BLOCK_TEMPLATES: BlockTemplate[] = [
     category: 'Camera',
     step: {
       title: 'CAMERA CUT',
-      duration: '0:05',
+      duration: '00:05',
       description: 'Cambio directo de cámara',
       actions: [
         { id: '1', action: 'Cut', target: 'Camera1', value: '', delay: 0 }
@@ -88,7 +88,7 @@ export const BLOCK_TEMPLATES: BlockTemplate[] = [
     category: 'Graphics',
     step: {
       title: 'LOWER THIRD',
-      duration: '0:10',
+      duration: '00:10',
       description: 'Mostrar información del presentador',
       actions: [
         { id: '1', action: 'OverlayInput1In', target: 'LowerThird1', value: '', delay: 0 },
@@ -111,7 +111,7 @@ export const BLOCK_TEMPLATES: BlockTemplate[] = [
     category: 'Break',
     step: {
       title: 'BREAK',
-      duration: '3:00',
+      duration: '03:00',
       description: 'Pausa comercial',
       actions: [
         { id: '1', action: 'Fade', target: 'Break', value: '', delay: 0 },
@@ -157,7 +157,7 @@ export const BLOCK_TEMPLATES: BlockTemplate[] = [
     category: 'Outro',
     step: {
       title: 'END OF SHOW',
-      duration: '1:00',
+      duration: '01:00',
       description: 'Cierre y despedida',
       actions: [
         { id: '1', action: 'Fade', target: 'EndShow', value: '', delay: 0 },
@@ -180,7 +180,7 @@ export const BLOCK_TEMPLATES: BlockTemplate[] = [
     category: 'Custom',
     step: {
       title: 'CUSTOM BLOCK',
-      duration: '2:00',
+      duration: '02:00',
       description: 'Bloque personalizado',
       actions: []
     }

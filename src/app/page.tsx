@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import VMixConnectionCompact from '@/components/VMixConnectionCompact'
+import VMixDiagnostic from '@/components/VMixDiagnostic'
 import ShowPlanner from '@/components/ShowPlanner'
 import { useVMixStore } from '@/store/vmix-store'
 import { automationEngine } from '@/services/automation-engine'
@@ -57,6 +58,11 @@ export default function Home() {
               </p>
             </div>
             <VMixConnectionCompact />
+            
+            {/* Herramienta de diagnóstico temporal */}
+            <div className="hidden xl:block">
+              <VMixDiagnostic />
+            </div>
           </div>
         </div>
       </div>

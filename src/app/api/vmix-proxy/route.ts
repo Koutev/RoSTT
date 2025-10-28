@@ -8,7 +8,10 @@ export async function GET(request: NextRequest) {
   const inputParam = searchParams.get('Input')
   const valueParam = searchParams.get('Value')
 
+  console.log(`[VMix Proxy] Request received:`, { ip, port, functionParam, inputParam, valueParam })
+
   if (!ip || !port) {
+    console.log(`[VMix Proxy] Missing IP or port`)
     return NextResponse.json(
       { error: 'IP y puerto son requeridos' },
       { status: 400 }
@@ -29,6 +32,8 @@ export async function GET(request: NextRequest) {
       vmixUrl += `?${params.toString()}`
     }
 
+    console.log(`[VMix Proxy] Attempting connection to: ${vmixUrl}`)
+
     // Hacer petición a vMix desde el servidor (sin problemas de CORS)
     const response = await fetch(vmixUrl, {
       method: 'GET',
@@ -36,15 +41,19 @@ export async function GET(request: NextRequest) {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       },
-      // Timeout de 10 segundos
-      signal: AbortSignal.timeout(10000)
+      // Timeout de 5 segundos (reducido para mejor UX)
+      signal: AbortSignal.timeout(5000)
     })
 
+    console.log(`[VMix Proxy] Response status: ${response.status}`)
+
     if (!response.ok) {
-      throw new Error(`vMix responded with status: ${response.status}`)
+      console.log(`[VMix Proxy] vMix responded with error: ${response.status} ${response.statusText}`)
+      throw new Error(`vMix responded with status: ${response.status} - ${response.statusText}`)
     }
 
     const data = await response.json()
+    console.log(`[VMix Proxy] Successfully connected to vMix`)
     
     return NextResponse.json(data, {
       headers: {
@@ -55,13 +64,32 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error: any) {
-    console.error('Proxy error:', error)
+    console.error(`[VMix Proxy] Error connecting to ${ip}:${port}:`, error.message)
+    
+    let errorMessage = 'Error conectando con vMix'
+    let errorCode = 'UNKNOWN'
+    
+    if (error.name === 'TimeoutError') {
+      errorMessage = `Timeout: vMix no responde en ${ip}:${port}. Verifica que vMix esté ejecutándose y el Web Controller esté habilitado.`
+      errorCode = 'TIMEOUT'
+    } else if (error.message.includes('ECONNREFUSED')) {
+      errorMessage = `Conexión rechazada: No se puede conectar a ${ip}:${port}. Verifica que vMix esté ejecutándose.`
+      errorCode = 'CONNECTION_REFUSED'
+    } else if (error.message.includes('ENOTFOUND')) {
+      errorMessage = `IP no encontrada: ${ip} no es accesible. Verifica la dirección IP.`
+      errorCode = 'HOST_NOT_FOUND'
+    } else if (error.message.includes('status:')) {
+      errorMessage = `vMix respondió con error: ${error.message}`
+      errorCode = 'VMIX_ERROR'
+    }
     
     return NextResponse.json(
       { 
-        error: 'Error conectando con vMix',
+        error: errorMessage,
         details: error.message,
-        code: error.code || 'UNKNOWN'
+        code: errorCode,
+        ip,
+        port
       },
       { 
         status: 500,

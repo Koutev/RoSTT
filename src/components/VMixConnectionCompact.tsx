@@ -64,9 +64,30 @@ export default function VMixConnectionCompact() {
       }
     } catch (error: any) {
       setConnected(false)
+      console.error('Error de conexión:', error)
+      
       let errorMessage = `❌ Error de conexión: ${error.message}`
       
-      if (error.code === 'ECONNREFUSED') {
+      // Manejar errores específicos del proxy
+      if (error.response?.data?.code) {
+        const errorData = error.response.data
+        switch (errorData.code) {
+          case 'TIMEOUT':
+            errorMessage = `❌ Timeout: vMix no responde en ${ip}:${portNumber}.\nVerifica que vMix esté ejecutándose y el Web Controller esté habilitado.`
+            break
+          case 'CONNECTION_REFUSED':
+            errorMessage = `❌ Conexión rechazada: No se puede conectar a ${ip}:${portNumber}.\nVerifica que vMix esté ejecutándose.`
+            break
+          case 'HOST_NOT_FOUND':
+            errorMessage = `❌ IP no encontrada: ${ip} no es accesible.\nVerifica la dirección IP.`
+            break
+          case 'VMIX_ERROR':
+            errorMessage = `❌ Error de vMix: ${errorData.details}`
+            break
+          default:
+            errorMessage = `❌ Error: ${errorData.error || error.message}`
+        }
+      } else if (error.code === 'ECONNREFUSED') {
         errorMessage = `❌ Conexión rechazada. Verifica que vMix esté ejecutándose y el puerto ${portNumber} esté abierto.`
       } else if (error.code === 'ENOTFOUND') {
         errorMessage = `❌ IP no encontrada. Verifica que ${ip} sea la dirección correcta de vMix.`

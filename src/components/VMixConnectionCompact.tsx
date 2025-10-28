@@ -191,11 +191,11 @@ export default function VMixConnectionCompact() {
 
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <Label htmlFor="ip-compact" className="text-xs">IP</Label>
+                <Label htmlFor="ip-compact" className="text-xs">IP o URL</Label>
                 <Input
                   id="ip-compact"
                   type="text"
-                  placeholder="192.168.1.100"
+                  placeholder="192.168.1.100 o abc123.ngrok.io"
                   value={ip}
                   onChange={(e) => setIp(e.target.value)}
                   disabled={connection.connected}
@@ -214,6 +214,14 @@ export default function VMixConnectionCompact() {
                   className="h-8 text-xs"
                 />
               </div>
+            </div>
+
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p><strong>Para conectar desde internet:</strong></p>
+              <p>• Usa ngrok: descarga de ngrok.com</p>
+              <p>• Ejecuta: <code>ngrok http 8088</code></p>
+              <p>• Usa la URL de ngrok como "IP"</p>
+              <p>• Puerto: 80 (por defecto)</p>
             </div>
 
             <div className="flex gap-2">

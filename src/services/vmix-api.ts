@@ -71,6 +71,7 @@ class VMixAPI {
     if (this.useProxy) {
       this.baseURL = '/api/vmix-proxy'
     } else {
+      // Formato correcto según documentación oficial: http://IP:PORT/api/
       this.baseURL = `http://${ip}:${port}/api`
     }
   }
@@ -81,14 +82,31 @@ class VMixAPI {
         ? `${this.baseURL}?ip=${this.ip}&port=${this.port}`
         : this.baseURL
         
+      console.log(`[VMix API] Testing connection to: ${url}`)
+        
       const response = await axios.get(url, { 
         timeout: 5000,
         headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
+          'Accept': 'application/xml, text/xml, */*',
+          'Content-Type': 'application/xml'
         }
       })
-      return response.status === 200
+      
+      // vMix devuelve XML, verificar que recibimos contenido válido
+      if (response.status === 200) {
+        const xmlData = response.data
+        console.log(`[VMix API] Connection successful, XML received:`, xmlData.substring(0, 200) + '...')
+        
+        // Verificar que recibimos XML válido de vMix
+        if (typeof xmlData === 'string' && (xmlData.includes('<vmix>') || xmlData.includes('<vmixStatus>'))) {
+          return true
+        } else {
+          console.error('Respuesta no válida de vMix - no es XML')
+          return false
+        }
+      }
+      
+      return false
     } catch (error: any) {
       console.error('Error testing vMix connection:', error)
       
@@ -115,8 +133,43 @@ class VMixAPI {
         ? `${this.baseURL}?ip=${this.ip}&port=${this.port}`
         : this.baseURL
         
-      const response = await axios.get(url, { timeout: 5000 })
-      return response.data
+      const response = await axios.get(url, { 
+        timeout: 5000,
+        headers: {
+          'Accept': 'application/xml, text/xml, */*',
+          'Content-Type': 'application/xml'
+        }
+      })
+      
+      // vMix devuelve XML, necesitamos parsearlo
+      const xmlData = response.data
+      console.log(`[VMix API] XML data received:`, xmlData.substring(0, 200) + '...')
+      
+      // Por ahora devolvemos el XML raw, más adelante podemos parsearlo
+      return {
+        version: 'XML',
+        edition: 'XML',
+        preset: 'XML',
+        inputs: [],
+        overlays: [],
+        preview: 0,
+        active: 0,
+        fadeToBlack: false,
+        recording: false,
+        external: false,
+        streaming: false,
+        playList: false,
+        multiCorder: false,
+        fullscreen: false,
+        audio: {
+          master: {
+            volume: 0,
+            muted: false,
+            meterF1: 0,
+            meterF2: 0
+          }
+        }
+      } as VMixData
     } catch (error) {
       console.error('Error fetching vMix data:', error)
       return null

@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Construir URL de vMix
-    let vmixUrl = `http://${ip}:${port}/api`
+    // Formato correcto según documentación oficial: http://IP:PORT/api/
+    let vmixUrl = `http://${ip}:${port}/api/`
     
     // Agregar parámetros si existen
     const params = new URLSearchParams()
@@ -38,8 +38,8 @@ export async function GET(request: NextRequest) {
     const response = await fetch(vmixUrl, {
       method: 'GET',
       headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
+        'Accept': 'application/xml, text/xml, */*',
+        'Content-Type': 'application/xml',
       },
       // Timeout de 5 segundos (reducido para mejor UX)
       signal: AbortSignal.timeout(5000)
@@ -52,8 +52,16 @@ export async function GET(request: NextRequest) {
       throw new Error(`vMix responded with status: ${response.status} - ${response.statusText}`)
     }
 
-    const data = await response.json()
+    // vMix devuelve XML, no JSON
+    const xmlData = await response.text()
     console.log(`[VMix Proxy] Successfully connected to vMix`)
+    
+    // Convertir XML a JSON para el frontend
+    const data = { 
+      success: true, 
+      xml: xmlData,
+      message: 'Conexión exitosa con vMix'
+    }
     
     return NextResponse.json(data, {
       headers: {

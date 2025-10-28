@@ -45,7 +45,7 @@ export default function Home() {
   return (
     <div className="h-screen bg-background flex flex-col">
       {/* Header compacto */}
-      <div className="flex-shrink-0 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="flex-shrink-0 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 relative z-50">
         <div className="container mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
             <div>

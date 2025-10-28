@@ -30,8 +30,13 @@ export default function VMixConnectionCompact() {
     vmixAPI.setConnection(ip, portNumber)
     
     setTesting(true)
+    
+    // Detectar si estamos en Vercel/HTTPS
+    const isVercel = typeof window !== 'undefined' && window.location.protocol === 'https:'
+    const connectionType = isVercel ? 'via proxy (Vercel)' : 'directa'
+    
     addConsoleLog({
-      message: `Intentando conectar a ${ip}:${portNumber}...`,
+      message: `Intentando conectar a ${ip}:${portNumber} (${connectionType})...`,
       type: 'info'
     })
 
@@ -41,7 +46,7 @@ export default function VMixConnectionCompact() {
       if (isConnected) {
         setConnected(true)
         addConsoleLog({
-          message: `✅ Conectado exitosamente a vMix en ${ip}:${portNumber}`,
+          message: `✅ Conectado exitosamente a vMix en ${ip}:${portNumber}${isVercel ? ' via proxy' : ''}`,
           type: 'success'
         })
         setIsOpen(false)
@@ -53,7 +58,7 @@ export default function VMixConnectionCompact() {
             `\n• Web Controller está habilitado` +
             `\n• IP y puerto son correctos` +
             `\n• No hay firewall bloqueando` +
-            `\n• CORS está configurado para dominios externos`,
+            `${isVercel ? '\n• El proxy de Vercel está funcionando' : ''}`,
           type: 'error'
         })
       }
@@ -67,6 +72,8 @@ export default function VMixConnectionCompact() {
         errorMessage = `❌ IP no encontrada. Verifica que ${ip} sea la dirección correcta de vMix.`
       } else if (error.code === 'ECONNABORTED') {
         errorMessage = `❌ Timeout. vMix no responde en ${ip}:${portNumber}. Verifica la conexión de red.`
+      } else if (isVercel && error.message.includes('proxy')) {
+        errorMessage = `❌ Error del proxy de Vercel. Intenta nuevamente o verifica la configuración.`
       }
       
       addConsoleLog({
@@ -121,7 +128,7 @@ export default function VMixConnectionCompact() {
   }
 
   return (
-    <div className="relative">
+    <div className="relative z-[100]">
       {/* Botón principal */}
       <Button
         variant="outline"
@@ -146,7 +153,7 @@ export default function VMixConnectionCompact() {
 
       {/* Menú desplegable */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-background border rounded-lg shadow-lg z-50 p-4">
+        <div className="absolute right-0 top-full mt-2 w-80 bg-background border rounded-lg shadow-lg z-[9999] p-4">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-medium">Conexión vMix</h3>
@@ -228,7 +235,7 @@ export default function VMixConnectionCompact() {
       {/* Overlay para cerrar el menú */}
       {isOpen && (
         <div 
-          className="fixed inset-0 z-40" 
+          className="fixed inset-0 z-[9998]" 
           onClick={() => setIsOpen(false)}
         />
       )}

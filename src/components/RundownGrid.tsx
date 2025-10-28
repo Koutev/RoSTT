@@ -38,8 +38,7 @@ export default function RundownGrid() {
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
 
     if (targetIndex >= 0 && targetIndex < newRows.length) {
-      [newRows[currentIndex], newRows[targetIndex]] = [newRows[targetIndex], newRows[currentIndex]]
-      reorderRows(newRows)
+      reorderRows(currentIndex, targetIndex)
     }
   }
 

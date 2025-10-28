@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useVMixStore, BlockTemplate } from '@/store/vmix-store'
+import { useVMixStore } from '@/store/vmix-store'
+import { BlockTemplate } from '@/data/block-templates'
 import { Edit, Trash2, Save, X, Star } from 'lucide-react'
 
 export default function TemplateManager() {
@@ -100,7 +101,7 @@ export default function TemplateManager() {
                 <div className="text-center py-8 text-muted-foreground">
                   <Star className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No tienes plantillas personalizadas aún</p>
-                  <p className="text-sm">Crea tu primera plantilla desde el botón "Crear Bloque"</p>
+                  <p className="text-sm">Crea tu primera plantilla desde el botón &quot;Crear Bloque&quot;</p>
                 </div>
               ) : (
                 <div className="space-y-4">

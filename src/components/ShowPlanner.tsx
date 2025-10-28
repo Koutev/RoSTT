@@ -45,6 +45,18 @@ export default function ShowPlanner() {
     })
   )
 
+  const handleEditCueField = (rowId: string, fieldId: string) => {
+    setEditingCueField({ rowId, fieldId })
+  }
+
+  const handleExecuteRow = async (row: RunOfShowStep) => {
+    addConsoleLog({ message: `Ejecutando bloque: ${row.title}`, type: 'info' })
+    for (const action of row.actions) {
+      await automationEngine.executeAction(action)
+    }
+    addConsoleLog({ message: `Bloque completado: ${row.title}`, type: 'success' })
+  }
+
   const handleAddBlock = (step: RunOfShowStep) => {
     addRowFromRunOfShow(step)
   }
@@ -164,7 +176,8 @@ export default function ShowPlanner() {
                           onEdit={setEditingBlock}
                           onRemove={removeRow}
                           onUpdateRow={updateRow}
-                          onEditCueField={setEditingCueField}
+                          onEditCueField={handleEditCueField}
+                          onExecuteRow={handleExecuteRow}
                         />
                       ))}
                       
@@ -190,24 +203,14 @@ export default function ShowPlanner() {
         <BlockEditor
           row={rundown.rows.find(r => r.id === editingBlock)!}
           onClose={() => setEditingBlock(null)}
-          onSave={(updates) => {
+          onUpdate={(updates) => {
             updateRow(editingBlock, updates)
             setEditingBlock(null)
           }}
         />
       )}
 
-      {editingCueField && (
-        <CueFieldEditor
-          row={rundown.rows.find(r => r.id === editingCueField.rowId)!}
-          fieldId={editingCueField.fieldId}
-          onClose={() => setEditingCueField(null)}
-          onSave={(updates) => {
-            updateRow(editingCueField.rowId, updates)
-            setEditingCueField(null)
-          }}
-        />
-      )}
+      {/* Modal de acciones temporalmente deshabilitado */}
     </div>
   )
 }
@@ -245,6 +248,7 @@ interface SortableRowProps {
   onRemove: (rowId: string) => void
   onUpdateRow: (rowId: string, updates: Partial<RunOfShowStep>) => void
   onEditCueField: (rowId: string, fieldId: string) => void
+  onExecuteRow: (row: RunOfShowStep) => void
 }
 
 function SortableRow({ 
@@ -255,7 +259,8 @@ function SortableRow({
   onEdit, 
   onRemove, 
   onUpdateRow, 
-  onEditCueField 
+  onEditCueField,
+  onExecuteRow
 }: SortableRowProps) {
   const {
     attributes,
@@ -300,11 +305,6 @@ function SortableRow({
             value={row.title} 
             onChange={(e) => onUpdateRow(row.id, { title: e.target.value })} 
             className="font-medium flex-1"
-            style={{
-              backgroundColor: row.style?.backgroundColor,
-              color: row.style?.textColor,
-              borderColor: row.style?.borderColor,
-            }}
           />
           {isCurrentBlock && (
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
@@ -354,15 +354,7 @@ function SortableRow({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                const row = rundown.rows.find(r => r.id === row.id)
-                if (!row) return
-                addConsoleLog({ message: `Ejecutando bloque: ${row.title}`, type: 'info' })
-                for (const action of row.actions) {
-                  automationEngine.executeAction(action)
-                }
-                addConsoleLog({ message: `Bloque completado: ${row.title}`, type: 'success' })
-              }}
+              onClick={() => onExecuteRow(row)}
               className="text-xs h-6 px-2"
             >
               <Play className="h-3 w-3 mr-1" />

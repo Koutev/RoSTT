@@ -18,16 +18,11 @@ interface BlockEditorProps {
 }
 
 const COLOR_PRESETS = [
-  { name: 'Azul', value: '#3b82f6', text: '#ffffff' },
-  { name: 'Verde', value: '#10b981', text: '#ffffff' },
-  { name: 'Rojo', value: '#ef4444', text: '#ffffff' },
-  { name: 'Amarillo', value: '#f59e0b', text: '#000000' },
-  { name: 'Púrpura', value: '#8b5cf6', text: '#ffffff' },
-  { name: 'Rosa', value: '#ec4899', text: '#ffffff' },
-  { name: 'Cian', value: '#06b6d4', text: '#ffffff' },
-  { name: 'Gris', value: '#6b7280', text: '#ffffff' },
-  { name: 'Naranja', value: '#f97316', text: '#ffffff' },
-  { name: 'Lima', value: '#84cc16', text: '#000000' },
+  { name: 'Primario', value: '#0ea5e9' },
+  { name: 'Éxito', value: '#10b981' },
+  { name: 'Peligro', value: '#ef4444' },
+  { name: 'Advertencia', value: '#f59e0b' },
+  { name: 'Neutro', value: '#6b7280' },
 ]
 
 export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps) {
@@ -38,6 +33,29 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
     onUpdate({
       style: { ...row.style, ...styleUpdates }
     })
+  }
+
+  const getReadableTextColor = (hex: string): string => {
+    const clean = hex.replace('#', '')
+    const r = parseInt(clean.substring(0, 2), 16)
+    const g = parseInt(clean.substring(2, 4), 16)
+    const b = parseInt(clean.substring(4, 6), 16)
+    const yiq = (r * 299 + g * 587 + b * 114) / 1000
+    return yiq >= 140 ? '#111827' : '#ffffff'
+  }
+
+  const lightenToSoftFill = (hex: string, factor: number = 0.85): string => {
+    // Mezcla el color con blanco. factor=0.85 implica 85% blanco + 15% color
+    const clean = hex.replace('#', '')
+    const r = parseInt(clean.substring(0, 2), 16)
+    const g = parseInt(clean.substring(2, 4), 16)
+    const b = parseInt(clean.substring(4, 6), 16)
+    const mix = (channel: number) => Math.round(255 * factor + channel * (1 - factor))
+    const nr = mix(r)
+    const ng = mix(g)
+    const nb = mix(b)
+    const toHex = (n: number) => n.toString(16).padStart(2, '0')
+    return `#${toHex(nr)}${toHex(ng)}${toHex(nb)}`
   }
 
   const addCustomField = () => {
@@ -149,9 +167,9 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
                   </div>
                 </div>
 
-                {/* Presets de colores */}
+                {/* Paleta de colores profesional */}
                 <div className="space-y-4">
-                  <Label className="text-sm font-medium">Presets de Colores</Label>
+                  <Label className="text-sm font-medium">Color del bloque</Label>
                   <div className="grid grid-cols-5 gap-3">
                     {COLOR_PRESETS.map((preset) => (
                       <button
@@ -159,13 +177,20 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
                         className="p-3 rounded-lg border-2 hover:scale-105 transition-transform"
                         style={{
                           backgroundColor: preset.value,
-                          color: preset.text,
-                          borderColor: row.style?.backgroundColor === preset.value ? '#000' : 'transparent'
+                          color: getReadableTextColor(preset.value),
+                          borderColor: row.style?.backgroundColor === preset.value ? '#111827' : 'transparent'
                         }}
-                        onClick={() => updateStyle({
-                          backgroundColor: preset.value,
-                          textColor: preset.text
-                        })}
+                        onClick={() => {
+                          const base = preset.value
+                          const soft = lightenToSoftFill(base)
+                          updateStyle({
+                            backgroundColor: soft,
+                            textColor: '#111827',
+                            borderColor: base,
+                            borderWidth: 2,
+                            borderRadius: 8,
+                          })
+                        }}
                       >
                         <div className="text-xs font-medium">{preset.name}</div>
                       </button>
@@ -173,54 +198,36 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
                   </div>
                 </div>
 
-                {/* Colores personalizados */}
-                <div className="grid grid-cols-2 gap-4 mt-6">
+                {/* Personalización simple: elegir color base y derivamos relleno suave + borde fuerte */}
+                <div className="mt-6 grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Color de Fondo</Label>
+                    <Label>Color base</Label>
                     <Input
                       type="color"
-                      value={row.style?.backgroundColor || '#f3f4f6'}
-                      onChange={(e) => updateStyle({ backgroundColor: e.target.value })}
+                      defaultValue={row.style?.borderColor || '#0ea5e9'}
+                      onChange={(e) => {
+                        const base = e.target.value
+                        const soft = lightenToSoftFill(base)
+                        updateStyle({
+                          backgroundColor: soft,
+                          textColor: '#111827',
+                          borderColor: base,
+                          borderWidth: 2,
+                          borderRadius: 8,
+                        })
+                      }}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Color de Texto</Label>
-                    <Input
-                      type="color"
-                      value={row.style?.textColor || '#000000'}
-                      onChange={(e) => updateStyle({ textColor: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                {/* Bordes */}
-                <div className="grid grid-cols-3 gap-4 mt-6">
-                  <div className="space-y-2">
-                    <Label>Color del Borde</Label>
-                    <Input
-                      type="color"
-                      value={row.style?.borderColor || '#d1d5db'}
-                      onChange={(e) => updateStyle({ borderColor: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Grosor del Borde</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      max="10"
-                      value={row.style?.borderWidth || 1}
-                      onChange={(e) => updateStyle({ borderWidth: parseInt(e.target.value) || 1 })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Radio del Borde</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      max="20"
-                      value={row.style?.borderRadius || 8}
-                      onChange={(e) => updateStyle({ borderRadius: parseInt(e.target.value) || 8 })}
+                    <Label>Vista</Label>
+                    <div 
+                      className="h-10 rounded-md border"
+                      style={{
+                        backgroundColor: row.style?.backgroundColor,
+                        borderColor: row.style?.borderColor,
+                        borderWidth: 2,
+                        borderStyle: 'solid'
+                      }}
                     />
                   </div>
                 </div>

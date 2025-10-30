@@ -217,11 +217,12 @@ export default function VMixConnectionCompact() {
             </div>
 
             <div className="text-xs text-muted-foreground space-y-1">
-              <p><strong>Para conectar desde internet:</strong></p>
-              <p>• Usa ngrok: descarga de ngrok.com</p>
-              <p>• Ejecuta: <code>ngrok http 8088</code></p>
-              <p>• Usa la URL de ngrok como "IP"</p>
-              <p>• Puerto: 80 (por defecto)</p>
+              <p><strong>⚠️ vMix no está ejecutándose</strong></p>
+              <p>• Abre vMix en tu PC</p>
+              <p>• Settings → Web Controller</p>
+              <p>• ✅ Enable Web Controller</p>
+              <p>• Puerto: 8088</p>
+              <p className="text-yellow-600 font-semibold">• Luego prueba con: localhost:8088</p>
             </div>
 
             <div className="flex gap-2">

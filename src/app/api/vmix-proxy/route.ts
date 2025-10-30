@@ -52,19 +52,14 @@ export async function GET(request: NextRequest) {
       throw new Error(`vMix responded with status: ${response.status} - ${response.statusText}`)
     }
 
-    // vMix devuelve XML, no JSON
+    // vMix devuelve XML, lo devolvemos tal cual (passthrough)
     const xmlData = await response.text()
     console.log(`[VMix Proxy] Successfully connected to vMix`)
-    
-    // Convertir XML a JSON para el frontend
-    const data = { 
-      success: true, 
-      xml: xmlData,
-      message: 'Conexión exitosa con vMix'
-    }
-    
-    return NextResponse.json(data, {
+
+    return new NextResponse(xmlData, {
+      status: 200,
       headers: {
+        'Content-Type': 'application/xml; charset=utf-8',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',

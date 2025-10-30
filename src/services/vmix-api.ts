@@ -86,9 +86,9 @@ class VMixAPI {
         
       const response = await axios.get(url, { 
         timeout: 5000,
+        responseType: 'text',
         headers: {
           'Accept': 'application/xml, text/xml, */*',
-          'Content-Type': 'application/xml'
         }
       })
       
@@ -132,44 +132,80 @@ class VMixAPI {
       const url = this.useProxy 
         ? `${this.baseURL}?ip=${this.ip}&port=${this.port}`
         : this.baseURL
-        
+
       const response = await axios.get(url, { 
         timeout: 5000,
+        responseType: 'text',
         headers: {
           'Accept': 'application/xml, text/xml, */*',
-          'Content-Type': 'application/xml'
         }
       })
-      
-      // vMix devuelve XML, necesitamos parsearlo
-      const xmlData = response.data
-      console.log(`[VMix API] XML data received:`, xmlData.substring(0, 200) + '...')
-      
-      // Por ahora devolvemos el XML raw, más adelante podemos parsearlo
-      return {
-        version: 'XML',
-        edition: 'XML',
-        preset: 'XML',
-        inputs: [],
-        overlays: [],
-        preview: 0,
-        active: 0,
-        fadeToBlack: false,
-        recording: false,
-        external: false,
-        streaming: false,
-        playList: false,
-        multiCorder: false,
-        fullscreen: false,
-        audio: {
-          master: {
-            volume: 0,
-            muted: false,
-            meterF1: 0,
-            meterF2: 0
-          }
-        }
-      } as VMixData
+
+      const xml = response.data as string
+      if (typeof xml !== 'string') return null
+
+      // Parse XML (browser DOMParser)
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(xml, 'application/xml')
+      const vmixEl = doc.querySelector('vmix')
+      if (!vmixEl) return null
+
+      const inputsEl = vmixEl.querySelector('inputs')
+      const inputNodes = inputsEl ? Array.from(inputsEl.getElementsByTagName('input')) : []
+      const inputs: VMixInput[] = inputNodes.map((el: Element, idx: number) => ({
+        key: el.getAttribute('key') || `${idx}`,
+        number: parseInt(el.getAttribute('number') || `${idx+1}`),
+        type: el.getAttribute('type') || '',
+        title: el.getAttribute('title') || '',
+        shortTitle: el.getAttribute('shortTitle') || el.getAttribute('title') || '',
+        state: el.getAttribute('state') || '',
+        position: parseInt(el.getAttribute('position') || '0'),
+        duration: parseInt(el.getAttribute('duration') || '0'),
+        loop: (el.getAttribute('loop') || 'False') === 'True',
+        muted: (el.getAttribute('muted') || 'False') === 'True',
+        volume: parseInt(el.getAttribute('volume') || '0'),
+        balance: parseInt(el.getAttribute('balance') || '0'),
+        solo: (el.getAttribute('solo') || 'False') === 'True',
+        audiobusses: el.getAttribute('audiobusses') || '',
+        meterF1: parseInt(el.getAttribute('meterF1') || '0'),
+        meterF2: parseInt(el.getAttribute('meterF2') || '0'),
+        gainDb: parseInt(el.getAttribute('gainDb') || '0'),
+        fadeToBlack: (el.getAttribute('fadeToBlack') || 'False') === 'True',
+        selectedIndex: parseInt(el.getAttribute('selectedIndex') || '0'),
+        lastFrame: el.getAttribute('lastFrame') || '',
+        lastFrameTime: parseInt(el.getAttribute('lastFrameTime') || '0'),
+      }))
+
+      const overlays: VMixOverlay[] = [] // opcional: parsear <overlays>
+      const preview = parseInt(vmixEl.getAttribute('preview') || '0')
+      const active = parseInt(vmixEl.getAttribute('active') || '0')
+      const fadeToBlack = (vmixEl.getAttribute('fadeToBlack') || 'False') === 'True'
+      const recording = (vmixEl.getAttribute('recording') || 'False') === 'True'
+      const external = (vmixEl.getAttribute('external') || 'False') === 'True'
+      const streaming = (vmixEl.getAttribute('streaming') || 'False') === 'True'
+      const playList = (vmixEl.getAttribute('playList') || 'False') === 'True'
+      const multiCorder = (vmixEl.getAttribute('multiCorder') || 'False') === 'True'
+      const fullscreen = (vmixEl.getAttribute('fullscreen') || 'False') === 'True'
+
+      const data: VMixData = {
+        version: vmixEl.getAttribute('version') || '',
+        edition: vmixEl.getAttribute('edition') || '',
+        preset: vmixEl.getAttribute('preset') || '',
+        inputs,
+        overlays,
+        preview,
+        active,
+        fadeToBlack,
+        recording,
+        external,
+        streaming,
+        playList,
+        multiCorder,
+        fullscreen,
+        audio: { master: { volume: 0, muted: false, meterF1: 0, meterF2: 0 } },
+      }
+
+      return data
     } catch (error) {
       console.error('Error fetching vMix data:', error)
       return null

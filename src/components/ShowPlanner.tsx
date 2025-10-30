@@ -36,7 +36,7 @@ import { CSS } from '@dnd-kit/utilities'
 export default function ShowPlanner() {
   const { rundown, addRowFromRunOfShow, reorderRows, updateRow, removeRow, addConsoleLog, showStartTime, showEndTime, setShowStartTime, setShowEndTime, showStatus, currentBlockIndex } = useVMixStore()
   const [editingBlock, setEditingBlock] = useState<string | null>(null)
-  const [editingCueField, setEditingCueField] = useState<{ rowId: string; fieldId: string } | null>(null)
+  const [editingActionsRowId, setEditingActionsRowId] = useState<string | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -45,8 +45,8 @@ export default function ShowPlanner() {
     })
   )
 
-  const handleEditCueField = (rowId: string, fieldId: string) => {
-    setEditingCueField({ rowId, fieldId })
+  const handleEditRowActions = (rowId: string) => {
+    setEditingActionsRowId(rowId)
   }
 
   const handleExecuteRow = async (row: RunOfShowStep) => {
@@ -176,7 +176,7 @@ export default function ShowPlanner() {
                           onEdit={setEditingBlock}
                           onRemove={removeRow}
                           onUpdateRow={updateRow}
-                          onEditCueField={handleEditCueField}
+                          onEditCueField={handleEditRowActions}
                           onExecuteRow={handleExecuteRow}
                         />
                       ))}
@@ -205,12 +205,22 @@ export default function ShowPlanner() {
           onClose={() => setEditingBlock(null)}
           onUpdate={(updates) => {
             updateRow(editingBlock, updates)
-            setEditingBlock(null)
           }}
         />
       )}
 
-      {/* Modal de acciones temporalmente deshabilitado */}
+      {editingActionsRowId && (
+        <ActionEditor
+          actions={rundown.rows.find(r => r.id === editingActionsRowId)?.actions || []}
+          onActionsChange={(newActions) => {
+            updateRow(editingActionsRowId, { actions: newActions })
+          }}
+          title={`Acciones de ${rundown.rows.find(r => r.id === editingActionsRowId)?.title || ''}`}
+          initialOpen
+          hideOpenButton
+          onClose={() => setEditingActionsRowId(null)}
+        />
+      )}
     </div>
   )
 }
@@ -276,12 +286,19 @@ function SortableRow({
     transition,
   }
 
+  const rowVisualStyle: React.CSSProperties = {
+    ...(row as any).style?.backgroundColor ? { backgroundColor: (row as any).style.backgroundColor } : {},
+    ...(row as any).style?.textColor ? { color: (row as any).style.textColor } : {},
+    ...(row as any).style?.borderColor ? { borderColor: (row as any).style.borderColor } : {},
+    ...(row as any).style?.borderWidth !== undefined ? { borderWidth: (row as any).style.borderWidth, borderStyle: 'solid' } : {},
+  }
+
   const isCurrentBlock = showStatus !== 'idle' && showStatus !== 'completed' && currentBlockIndex === index
 
   return (
     <tr
       ref={setNodeRef}
-      style={style}
+      style={{ ...style, ...rowVisualStyle }}
       className={`hover:bg-muted/50 ${isCurrentBlock ? 'bg-red-100 border-red-500 border-2' : ''} ${isDragging ? 'opacity-50' : ''}`}
     >
       <td className="border px-2 py-1">

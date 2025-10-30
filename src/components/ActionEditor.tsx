@@ -1,12 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Badge } from '@/components/ui/badge'
 import { VMixAction } from '@/store/vmix-store'
+import { VMIX_ACTIONS_CATALOG, VMIX_CATEGORIES } from '@/data/vmix-actions'
+import { vmixAPI, VMixInput } from '@/services/vmix-api'
 import { Plus, Trash2, Play, Settings, X } from 'lucide-react'
 import { automationEngine } from '@/services/automation-engine'
 
@@ -15,71 +18,31 @@ interface ActionEditorProps {
   onActionsChange: (actions: VMixAction[]) => void
   onExecuteAction?: (action: VMixAction) => void
   title: string
+  initialOpen?: boolean
+  onClose?: () => void
+  hideOpenButton?: boolean
 }
 
-// Todas las acciones disponibles de vMix API
-const VMIX_ACTIONS = [
-  // Transiciones
-  { value: 'Cut', label: 'Cut - Cambio directo', category: 'Transiciones' },
-  { value: 'Fade', label: 'Fade - Transición suave', category: 'Transiciones' },
-  { value: 'FadeToBlack', label: 'Fade to Black', category: 'Transiciones' },
-  { value: 'FadeFromBlack', label: 'Fade from Black', category: 'Transiciones' },
-  
-  // Overlays
-  { value: 'OverlayInput1In', label: 'Overlay 1 In', category: 'Overlays' },
-  { value: 'OverlayInput1Out', label: 'Overlay 1 Out', category: 'Overlays' },
-  { value: 'OverlayInput2In', label: 'Overlay 2 In', category: 'Overlays' },
-  { value: 'OverlayInput2Out', label: 'Overlay 2 Out', category: 'Overlays' },
-  { value: 'OverlayInput3In', label: 'Overlay 3 In', category: 'Overlays' },
-  { value: 'OverlayInput3Out', label: 'Overlay 3 Out', category: 'Overlays' },
-  { value: 'OverlayInput4In', label: 'Overlay 4 In', category: 'Overlays' },
-  { value: 'OverlayInput4Out', label: 'Overlay 4 Out', category: 'Overlays' },
-  
-  // Playback
-  { value: 'PlayInput', label: 'Play Input', category: 'Playback' },
-  { value: 'PauseInput', label: 'Pause Input', category: 'Playback' },
-  { value: 'StopInput', label: 'Stop Input', category: 'Playback' },
-  { value: 'RestartInput', label: 'Restart Input', category: 'Playback' },
-  { value: 'LoopInput', label: 'Loop Input', category: 'Playback' },
-  
-  // Audio
-  { value: 'SetVolume', label: 'Set Volume', category: 'Audio' },
-  { value: 'SetAudioLevel', label: 'Set Audio Level', category: 'Audio' },
-  { value: 'SetAudioBalance', label: 'Set Audio Balance', category: 'Audio' },
-  { value: 'SetAudioBus', label: 'Set Audio Bus', category: 'Audio' },
-  { value: 'SetAudioGain', label: 'Set Audio Gain', category: 'Audio' },
-  
-  // Text
-  { value: 'SetText', label: 'Set Text', category: 'Text' },
-  { value: 'SetTextColor', label: 'Set Text Color', category: 'Text' },
-  { value: 'SetTextSize', label: 'Set Text Size', category: 'Text' },
-  { value: 'SetTextPosition', label: 'Set Text Position', category: 'Text' },
-  
-  // Position & Effects
-  { value: 'SetPosition', label: 'Set Position', category: 'Position' },
-  { value: 'SetZoom', label: 'Set Zoom', category: 'Position' },
-  { value: 'SetPanX', label: 'Set Pan X', category: 'Position' },
-  { value: 'SetPanY', label: 'Set Pan Y', category: 'Position' },
-  { value: 'SetRotation', label: 'Set Rotation', category: 'Position' },
-  
-  // Recording & Streaming
-  { value: 'StartRecording', label: 'Start Recording', category: 'Recording' },
-  { value: 'StopRecording', label: 'Stop Recording', category: 'Recording' },
-  { value: 'StartStreaming', label: 'Start Streaming', category: 'Recording' },
-  { value: 'StopStreaming', label: 'Stop Streaming', category: 'Recording' },
-  
-  // MultiView
-  { value: 'SetMultiViewOverlay', label: 'Set MultiView Overlay', category: 'MultiView' },
-  { value: 'SetMultiViewInput', label: 'Set MultiView Input', category: 'MultiView' },
-  
-  // External
-  { value: 'SetExternal', label: 'Set External', category: 'External' },
-  { value: 'SetExternalInput', label: 'Set External Input', category: 'External' },
-]
+const VMIX_ACTIONS = VMIX_ACTIONS_CATALOG
 
-export default function ActionEditor({ actions, onActionsChange, onExecuteAction, title }: ActionEditorProps) {
-  const [isOpen, setIsOpen] = useState(false)
+export default function ActionEditor({ actions, onActionsChange, onExecuteAction, title, initialOpen, onClose, hideOpenButton }: ActionEditorProps) {
+  const [isOpen, setIsOpen] = useState(!!initialOpen)
   const [editingAction, setEditingAction] = useState<VMixAction | null>(null)
+  const [pendingActionValue, setPendingActionValue] = useState<string | null>(null)
+  const [availableInputs, setAvailableInputs] = useState<VMixInput[]>([])
+  const [loadingInputs, setLoadingInputs] = useState(false)
+  const [actionSearch, setActionSearch] = useState('')
+
+  useEffect(() => {
+    const loadInputs = async () => {
+      if (!pendingActionValue) return
+      setLoadingInputs(true)
+      const data = await vmixAPI.getData()
+      setAvailableInputs(data?.inputs || [])
+      setLoadingInputs(false)
+    }
+    loadInputs()
+  }, [pendingActionValue])
 
   const addAction = () => {
     const newAction: VMixAction = {
@@ -119,20 +82,22 @@ export default function ActionEditor({ actions, onActionsChange, onExecuteAction
     return VMIX_ACTIONS.filter(a => a.category === category)
   }
 
-  const categories = Array.from(new Set(VMIX_ACTIONS.map(a => a.category)))
+  const categories = VMIX_CATEGORIES
 
   return (
     <>
-      {/* Botón para abrir editor */}
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2"
-      >
-        <Settings className="h-4 w-4" />
-        <span>{actions.length} acciones</span>
-      </Button>
+      {/* Botón para abrir editor (opcional) */}
+      {!hideOpenButton && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsOpen(true)}
+          className="flex items-center gap-2"
+        >
+          <Settings className="h-4 w-4" />
+          <span>{actions.length} acciones</span>
+        </Button>
+      )}
 
       {/* Modal del editor */}
       {isOpen && (
@@ -144,213 +109,260 @@ export default function ActionEditor({ actions, onActionsChange, onExecuteAction
                 <h2 className="text-xl font-semibold">Editor de Acciones</h2>
                 <p className="text-sm text-muted-foreground">{title}</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setIsOpen(false)}>
+              <Button variant="ghost" size="sm" onClick={() => { setIsOpen(false); onClose && onClose() }}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
 
             {/* Content */}
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-              <div className="space-y-4">
-                {/* Lista de acciones actuales */}
-                {actions.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No hay acciones configuradas. Agrega la primera acción abajo.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <h3 className="font-medium">Acciones Configuradas</h3>
-                    {actions.map((action, index) => (
-                      <div key={action.id} className="border rounded-lg p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <Badge variant="outline">#{index + 1}</Badge>
-                            <span className="font-medium">
-                              {getActionInfo(action.action)?.label || action.action}
-                            </span>
-                            {action.delay && action.delay > 0 && (
-                              <Badge variant="secondary">
-                                Delay: {action.delay}s
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => testAction(action)}
-                            >
-                              <Play className="h-3 w-3 mr-1" />
-                              Probar
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setEditingAction(action)}
-                            >
-                              Editar
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => removeAction(action.id)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                          <div>
-                            <span className="font-medium">Target:</span> {action.target || 'N/A'}
-                          </div>
-                          <div>
-                            <span className="font-medium">Value:</span> {action.value || 'N/A'}
-                          </div>
-                          <div>
-                            <span className="font-medium">Delay:</span> {action.delay || 0}s
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Izquierda: Selección y edición */}
+                <div className="space-y-4">
+                  <h3 className="font-medium">{editingAction ? 'Editar Acción' : 'Agregar Nueva Acción'}</h3>
 
-                {/* Editor de nueva acción */}
-                <div className="border-t pt-6">
-                  <h3 className="font-medium mb-4">
-                    {editingAction ? 'Editar Acción' : 'Agregar Nueva Acción'}
-                  </h3>
-                  
-                  <div className="space-y-4">
-                    {/* Selector de categoría y acción */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Categoría</Label>
+                  {/* Menú combinado Categoría > Acción */}
+                  <div className="space-y-2">
+                    <Label>Acción de vMix</Label>
+                    <DropdownMenu.Root>
+                      <DropdownMenu.Trigger asChild>
+                        <Button variant="outline" className="justify-between w-full">
+                          <span>
+                            {editingAction?.action
+                              ? (getActionInfo(editingAction.action)?.label || editingAction.action)
+                              : 'Selecciona categoría y acción'}
+                          </span>
+                          <span className="text-xs text-muted-foreground">(Categoría ▸ Acción)</span>
+                        </Button>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Content side="bottom" className="min-w-[360px] bg-popover border rounded-md p-1 shadow">
+                        <div className="p-2">
+                          <Input
+                            value={actionSearch}
+                            onChange={(e) => setActionSearch(e.target.value)}
+                            placeholder="Buscar acción…"
+                            className="h-8"
+                          />
+                        </div>
+                        <div className="max-h-72 overflow-auto">
+                          {actionSearch.trim() ? (
+                            VMIX_ACTIONS.filter((a) => a.label.toLowerCase().includes(actionSearch.toLowerCase()) || a.value.toLowerCase().includes(actionSearch.toLowerCase())).map((a) => (
+                              <DropdownMenu.Item
+                                key={`${a.category}-${a.value}`}
+                                className="px-2 py-1.5 text-sm rounded hover:bg-accent hover:text-accent-foreground cursor-pointer flex items-center justify-between"
+                                onSelect={(e) => {
+                                  e.preventDefault()
+                                  setPendingActionValue(a.value)
+                                }}
+                              >
+                                <span>{a.label}</span>
+                                <Badge variant="outline" className="text-[10px]">{a.category}</Badge>
+                              </DropdownMenu.Item>
+                            ))
+                          ) : (
+                            categories.map((category) => (
+                              <DropdownMenu.Sub key={category}>
+                                <DropdownMenu.SubTrigger className="px-2 py-1.5 text-sm rounded hover:bg-accent hover:text-accent-foreground cursor-pointer flex items-center justify-between">
+                                  <span>{category}</span>
+                                  <span className="text-muted-foreground">▸</span>
+                                </DropdownMenu.SubTrigger>
+                                <DropdownMenu.SubContent className="bg-popover border rounded-md p-1 shadow min-w-[300px] max-h-72 overflow-auto">
+                                  {getCategoryActions(category).map((a) => (
+                                    <DropdownMenu.Item
+                                      key={a.value}
+                                      className="px-2 py-1.5 text-sm rounded hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                                      onSelect={(e) => {
+                                        e.preventDefault()
+                                        // Paso 1: elegir acción -> luego pedimos Target
+                                        setPendingActionValue(a.value)
+                                      }}
+                                    >
+                                      {a.label}
+                                    </DropdownMenu.Item>
+                                  ))}
+                                </DropdownMenu.SubContent>
+                              </DropdownMenu.Sub>
+                            ))
+                          )}
+                        </div>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Root>
+                  </div>
+
+                  {/* Paso 2: seleccionar Target desde inputs de vMix */}
+                  {pendingActionValue && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Target (Input de vMix)</Label>
                         <Select
-                          value={editingAction?.action ? getActionInfo(editingAction.action)?.category : ''}
-                          onValueChange={(category) => {
-                            const firstAction = getCategoryActions(category)[0]
-                            if (firstAction && editingAction) {
-                              updateAction(editingAction.id, { action: firstAction.value })
+                          onValueChange={(selectedInputKey) => {
+                            const selected = availableInputs.find(i => i.key === selectedInputKey) || null
+                            const newAction: VMixAction = {
+                              id: `action-${Date.now()}`,
+                              action: pendingActionValue,
+                              target: selected?.key || selectedInputKey,
+                              value: '',
+                              delay: 0,
                             }
+                            onActionsChange([...actions, newAction])
+                            setEditingAction(newAction)
+                            setPendingActionValue(null)
                           }}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Selecciona categoría" />
+                            <SelectValue placeholder={loadingInputs ? 'Cargando inputs…' : (availableInputs.length ? 'Selecciona input' : 'Sin inputs detectados: escribir manual abajo')} />
                           </SelectTrigger>
                           <SelectContent>
-                            {categories.map(category => (
-                              <SelectItem key={category} value={category}>
-                                {category}
+                            {availableInputs.map((inp) => (
+                              <SelectItem key={inp.key} value={inp.key}>
+                                {inp.number}. {inp.shortTitle || inp.title} ({inp.type})
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                        {!loadingInputs && availableInputs.length === 0 && (
+                          <div className="text-xs text-muted-foreground">
+                            No se detectaron inputs desde vMix. Verificá la conexión o ingresá un Target manual abajo.
+                          </div>
+                        )}
                       </div>
-
-                      <div className="space-y-2">
-                        <Label>Acción</Label>
-                        <Select
-                          value={editingAction?.action || ''}
-                          onValueChange={(value) => {
-                            if (editingAction) {
-                              updateAction(editingAction.id, { action: value })
+                      <div className="space-y-2 md:col-span-1">
+                        <Label>Target manual (fallback)</Label>
+                        <Input
+                          placeholder="Ej: 1, Camera 1, GUID"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
+                              const manual = (e.target as HTMLInputElement).value.trim()
+                              const newAction: VMixAction = {
+                                id: `action-${Date.now()}`,
+                                action: pendingActionValue,
+                                target: manual,
+                                value: '',
+                                delay: 0,
+                              }
+                              onActionsChange([...actions, newAction])
+                              setEditingAction(newAction)
+                              setPendingActionValue(null)
                             }
                           }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona acción" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {categories.map(category => (
-                              <div key={category}>
-                                <div className="px-2 py-1 text-xs font-medium text-muted-foreground">
-                                  {category}
-                                </div>
-                                {getCategoryActions(category).map(action => (
-                                  <SelectItem key={action.value} value={action.value}>
-                                    {action.label}
-                                  </SelectItem>
-                                ))}
-                              </div>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        />
+                        <div className="text-xs text-muted-foreground">Presioná Enter para confirmar.</div>
                       </div>
                     </div>
+                  )}
 
-                    {/* Parámetros */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label>Target (Input/Elemento)</Label>
-                        <Input
-                          value={editingAction?.target || ''}
-                          onChange={(e) => {
-                            if (editingAction) {
-                              updateAction(editingAction.id, { target: e.target.value })
-                            }
-                          }}
-                          placeholder="Ej: Camera1, Input1"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Value (Valor)</Label>
-                        <Input
-                          value={editingAction?.value || ''}
-                          onChange={(e) => {
-                            if (editingAction) {
-                              updateAction(editingAction.id, { value: e.target.value })
-                            }
-                          }}
-                          placeholder="Ej: 0.8, Hello World"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Delay (segundos)</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.1"
-                          value={editingAction?.delay || 0}
-                          onChange={(e) => {
-                            if (editingAction) {
-                              updateAction(editingAction.id, { delay: parseFloat(e.target.value) || 0 })
-                            }
-                          }}
-                          placeholder="0"
-                        />
-                      </div>
+                  {/* Parámetros */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Target (Input/Elemento)</Label>
+                      <Input
+                        value={editingAction?.target || ''}
+                        onChange={(e) => {
+                          if (editingAction) {
+                            updateAction(editingAction.id, { target: e.target.value })
+                          }
+                        }}
+                        placeholder="Ej: Camera1, Input1"
+                      />
                     </div>
 
-                    {/* Botones */}
-                    <div className="flex gap-2">
-                      {editingAction ? (
-                        <>
-                          <Button onClick={() => setEditingAction(null)}>
-                            Guardar Cambios
-                          </Button>
-                          <Button variant="outline" onClick={() => setEditingAction(null)}>
-                            Cancelar
-                          </Button>
-                        </>
-                      ) : (
-                        <Button onClick={addAction}>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Agregar Acción
-                        </Button>
-                      )}
+                    <div className="space-y-2">
+                      <Label>Value (Valor)</Label>
+                      <Input
+                        value={editingAction?.value || ''}
+                        onChange={(e) => {
+                          if (editingAction) {
+                            updateAction(editingAction.id, { value: e.target.value })
+                          }
+                        }}
+                        placeholder="Ej: 0.8, Hello World"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Delay (segundos)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={editingAction?.delay || 0}
+                        onChange={(e) => {
+                          if (editingAction) {
+                            updateAction(editingAction.id, { delay: parseFloat(e.target.value) || 0 })
+                          }
+                        }}
+                        placeholder="0"
+                      />
                     </div>
                   </div>
+
+                  {/* Botones */}
+                  <div className="flex gap-2">
+                    {editingAction ? (
+                      <>
+                        <Button onClick={() => setEditingAction(null)}>
+                          Guardar Cambios
+                        </Button>
+                        <Button variant="outline" onClick={() => setEditingAction(null)}>
+                          Cancelar
+                        </Button>
+                      </>
+                    ) : (
+                      <Button onClick={addAction}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Agregar Acción
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Derecha: Lista de acciones actuales */}
+                <div className="space-y-3">
+                  <h3 className="font-medium">Acciones de esta fila (orden de ejecución)</h3>
+                  {actions.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground border rounded-lg">
+                      No hay acciones configuradas. Selecciona una acción a la izquierda.
+                    </div>
+                  ) : (
+                    actions.map((action, index) => (
+                      <div key={action.id} className="border rounded-lg p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <Badge variant="outline">#{index + 1}</Badge>
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                {getActionInfo(action.action)?.label || action.action}
+                              </span>
+                              <div className="mt-1 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-muted-foreground">
+                                <div><span className="font-medium">Target:</span> {action.target || '—'}</div>
+                                <div><span className="font-medium">Value:</span> {action.value || '—'}</div>
+                                <div><span className="font-medium">Delay:</span> {action.delay || 0}s</div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 flex-shrink-0">
+                            <Button size="sm" variant="outline" onClick={() => testAction(action)}>
+                              <Play className="h-3 w-3 mr-1" />
+                              Probar
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setEditingAction(action)}>
+                              Editar
+                            </Button>
+                            <Button size="sm" variant="destructive" onClick={() => removeAction(action.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Footer */}
             <div className="flex justify-end gap-2 p-6 border-t">
-              <Button variant="outline" onClick={() => setIsOpen(false)}>
+              <Button variant="outline" onClick={() => { setIsOpen(false); onClose && onClose() }}>
                 Cerrar
               </Button>
             </div>

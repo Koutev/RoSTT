@@ -65,15 +65,9 @@ class VMixAPI {
     this.ip = ip
     this.port = port
     
-    // Usar proxy HTTPS en producción (Vercel)
-    this.useProxy = typeof window !== 'undefined' && window.location.protocol === 'https:'
-    
-    if (this.useProxy) {
-      this.baseURL = '/api/vmix-proxy'
-    } else {
-      // Formato correcto según documentación oficial: http://IP:PORT/api/
-      this.baseURL = `http://${ip}:${port}/api`
-    }
+    // Siempre usar el proxy en cliente para evitar CORS/mixed content (dev y prod)
+    this.useProxy = true
+    this.baseURL = '/api/vmix-proxy'
   }
 
   async testConnection(): Promise<boolean> {

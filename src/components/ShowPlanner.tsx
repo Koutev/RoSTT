@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useVMixStore, RunOfShowStep, VMixAction, calculateEndTime } from '@/store/vmix-store'
 import { Plus, Trash2, Play, ArrowUp, ArrowDown, Settings, GripVertical } from 'lucide-react'
 import { automationEngine } from '@/services/automation-engine'
@@ -13,6 +14,7 @@ import BlockEditor from '@/components/BlockEditor'
 import CueFieldEditor from '@/components/CueFieldEditor'
 import BlockCreatorCompact from '@/components/BlockCreatorCompact'
 import Timeline from '@/components/Timeline'
+import ThemeToggle from '@/components/ThemeToggle'
 import {
   DndContext,
   closestCenter,
@@ -37,6 +39,15 @@ export default function ShowPlanner() {
   const { rundown, addRowFromRunOfShow, reorderRows, updateRow, removeRow, addConsoleLog, showStartTime, showEndTime, setShowStartTime, setShowEndTime, showStatus, currentBlockIndex } = useVMixStore()
   const [editingBlock, setEditingBlock] = useState<string | null>(null)
   const [editingActionsRowId, setEditingActionsRowId] = useState<string | null>(null)
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const stored = localStorage.getItem('rundown-column-widths')
+      return stored ? JSON.parse(stored) : {}
+    } catch {
+      return {}
+    }
+  })
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -44,6 +55,46 @@ export default function ShowPlanner() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   )
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rundown-column-widths', JSON.stringify(columnWidths))
+    } catch {}
+  }, [columnWidths])
+
+  const columns = [
+    { id: 'col-index', min: 60, max: 220 },
+    { id: 'col-block', min: 220, max: 800 },
+    { id: 'col-total', min: 120, max: 260 },
+    { id: 'col-duration', min: 120, max: 260 },
+    { id: 'col-notes', min: 220, max: 800 },
+    { id: 'col-actions', min: 160, max: 320 }
+  ] as const
+
+  const startResize = (colId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const th = (e.currentTarget as HTMLDivElement).parentElement as HTMLTableCellElement
+    const startX = e.clientX
+    const startWidth = th.getBoundingClientRect().width
+    const colMeta = columns.find(c => c.id === colId)!
+
+    const onMove = (ev: MouseEvent) => {
+      const delta = ev.clientX - startX
+      let newWidth = Math.max(colMeta.min, Math.min(colMeta.max, Math.round(startWidth + delta)))
+      setColumnWidths(prev => ({ ...prev, [colId]: newWidth }))
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
 
   const handleEditRowActions = (rowId: string) => {
     setEditingActionsRowId(rowId)
@@ -124,6 +175,8 @@ export default function ShowPlanner() {
                 <div className="text-sm text-muted-foreground">Finalización</div>
                 <div className="text-lg font-bold text-primary">{showEndTime}</div>
               </div>
+
+              <ThemeToggle />
             </div>
           </div>
         </div>
@@ -141,15 +194,56 @@ export default function ShowPlanner() {
               collisionDetection={closestCenter}
               onDragEnd={handleDragEnd}
             >
-              <table className="w-full border-collapse">
+              <table className="w-full border-collapse table-fixed">
+                <colgroup>
+                  {columns.map((c) => (
+                    <col key={c.id} style={{ width: (columnWidths[c.id] || undefined) as any }} />
+                  ))}
+                </colgroup>
                 <thead>
                   <tr>
-                    <th className="border px-2 py-1 w-8 text-left">#</th>
-                    <th className="border px-2 py-1 text-left">Bloque</th>
-                    <th className="border px-2 py-1 text-left">Tiempo Total</th>
-                    <th className="border px-2 py-1 text-left">Duración</th>
-                    <th className="border px-2 py-1 text-left">Notas</th>
-                    <th className="border px-2 py-1 text-left w-32">Acciones</th>
+                    <th className="border px-2 py-1 text-left relative group">
+                      #
+                      <div
+                        className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize opacity-0 group-hover:opacity-100"
+                        onMouseDown={(e) => startResize('col-index', e)}
+                      />
+                    </th>
+                    <th className="border px-2 py-1 text-left relative group">
+                      Bloque
+                      <div
+                        className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize opacity-0 group-hover:opacity-100"
+                        onMouseDown={(e) => startResize('col-block', e)}
+                      />
+                    </th>
+                    <th className="border px-2 py-1 text-center relative group">
+                      Tiempo Total
+                      <div
+                        className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize opacity-0 group-hover:opacity-100"
+                        onMouseDown={(e) => startResize('col-total', e)}
+                      />
+                    </th>
+                    <th className="border px-2 py-1 text-left relative group">
+                      Duración
+                      <div
+                        className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize opacity-0 group-hover:opacity-100"
+                        onMouseDown={(e) => startResize('col-duration', e)}
+                      />
+                    </th>
+                    <th className="border px-2 py-1 text-left relative group">
+                      Notas
+                      <div
+                        className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize opacity-0 group-hover:opacity-100"
+                        onMouseDown={(e) => startResize('col-notes', e)}
+                      />
+                    </th>
+                    <th className="border px-2 py-1 text-left relative group">
+                      Acciones
+                      <div
+                        className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize opacity-0 group-hover:opacity-100"
+                        onMouseDown={(e) => startResize('col-actions', e)}
+                      />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -286,9 +380,20 @@ function SortableRow({
     transition,
   }
 
+  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+  const desiredTextColor = (row as any).style?.textColor as string | undefined
+  const normalizedTextColor = (() => {
+    if (!desiredTextColor) return undefined
+    const darkish = ['#000', '#000000', '#111', '#111111', '#111827']
+    if (isDark && darkish.includes(desiredTextColor.toLowerCase())) {
+      return '#ffffff'
+    }
+    return desiredTextColor
+  })()
+
   const rowVisualStyle: React.CSSProperties = {
     ...(row as any).style?.backgroundColor ? { backgroundColor: (row as any).style.backgroundColor } : {},
-    ...(row as any).style?.textColor ? { color: (row as any).style.textColor } : {},
+    ...(normalizedTextColor ? { color: normalizedTextColor } : {}),
     ...(row as any).style?.borderColor ? { borderColor: (row as any).style.borderColor } : {},
     ...(row as any).style?.borderWidth !== undefined ? { borderWidth: (row as any).style.borderWidth, borderStyle: 'solid' } : {},
   }
@@ -302,33 +407,94 @@ function SortableRow({
       className={`hover:bg-muted/50 ${isCurrentBlock ? 'bg-red-100 border-red-500 border-2' : ''} ${isDragging ? 'opacity-50' : ''}`}
     >
       <td className="border px-2 py-1">
-        <div className="flex items-center gap-2">
-          <div
-            {...attributes}
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-200 rounded"
-            title="Arrastrar para reordenar"
-          >
-            <GripVertical className="h-4 w-4 text-gray-500" />
+        <div className="flex flex-col items-start gap-1">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              {...attributes}
+              {...listeners}
+              onClick={() => { if (!isDragging) onEdit(row.id) }}
+              className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-200 rounded"
+              title="Editar bloque (clic) • Arrastrar para reordenar"
+            >
+              <GripVertical className="h-4 w-4 text-gray-500" />
+            </button>
+            <span className="text-sm font-medium text-muted-foreground">
+              {index + 1}
+            </span>
           </div>
-          <span className="text-sm font-medium text-muted-foreground">
-            {index + 1}
-          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onEdit(row.id)}
+            className="h-6 px-2 py-0 text-xs"
+            title="Editar bloque"
+          >
+            <Settings className="h-3 w-3 mr-1" />
+            Editar
+          </Button>
         </div>
       </td>
       <td className="border px-2 py-1">
-        <div className="flex items-center gap-2">
-          <Input 
-            value={row.title} 
-            onChange={(e) => onUpdateRow(row.id, { title: e.target.value })} 
-            className="font-medium flex-1"
-          />
-          {isCurrentBlock && (
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Input 
+              value={row.title} 
+              onChange={(e) => onUpdateRow(row.id, { title: e.target.value })} 
+              className="font-semibold text-sm flex-1"
+            />
+            {isCurrentBlock && (
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+            )}
+          </div>
+          {row.customFields && row.customFields.length > 0 && (
+            <>
+              {row.customFields.length >= 3 && (
+                <div className="h-px bg-border" />
+              )}
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {row.customFields.map((field) => (
+                  <div key={field.id} className="flex items-center gap-1">
+                    {field.type === 'cue' && (
+                      <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">CUE</Badge>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">{field.label}</span>
+                    {field.type === 'text' ? (
+                      <Input
+                        value={field.value}
+                        onChange={(e) => {
+                          const updated = (row.customFields || []).map(f => f.id === field.id ? { ...f, value: e.target.value } : f)
+                          onUpdateRow(row.id, { customFields: updated as any })
+                        }}
+                        className="h-7 text-[11px] w-40"
+                        placeholder={field.placeholder || ''}
+                      />
+                    ) : (
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          const updated = (row.customFields || []).map(f => f.id === field.id ? { ...f, value: v } : f)
+                          onUpdateRow(row.id, { customFields: updated as any })
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-[11px] px-2 py-0 w-40">
+                          <SelectValue placeholder="Elegir" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(field.options || []).map(opt => (
+                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </td>
-      <td className="border px-2 py-1">
+      <td className="border px-2 py-1 text-center">
         <span className="text-sm text-muted-foreground">
           {calcTotalDuration([row])}
         </span>
@@ -376,14 +542,6 @@ function SortableRow({
             >
               <Play className="h-3 w-3 mr-1" />
               Ejecutar
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onEdit(row.id)}
-              className="h-6 w-6 p-0"
-            >
-              <Settings className="h-4 w-4" />
             </Button>
             <Button
               variant="ghost"

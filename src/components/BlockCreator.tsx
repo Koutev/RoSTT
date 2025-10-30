@@ -28,12 +28,15 @@ export default function BlockCreator({ onAddBlock }: BlockCreatorProps) {
   const [templateName, setTemplateName] = useState('')
   const [templateDescription, setTemplateDescription] = useState('')
 
-  const { customTemplates, addCustomTemplate, addConsoleLog } = useVMixStore()
+  const { customTemplates, templateOverrides, addCustomTemplate, addConsoleLog } = useVMixStore()
 
   const handleTemplateSelect = (template: BlockTemplate) => {
+    const defaultFields = template.customFields || templateOverrides[template.id]
     const step: RunOfShowStep = {
       id: Date.now().toString(),
       ...template.step,
+      templateId: template.id,
+      customFields: defaultFields ? JSON.parse(JSON.stringify(defaultFields)) : undefined,
       actions: template.step.actions.map(action => ({
         ...action,
         id: `action-${Date.now()}-${Math.random()}`

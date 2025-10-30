@@ -26,8 +26,9 @@ const COLOR_PRESETS = [
 ]
 
 export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps) {
-  const [activeTab, setActiveTab] = useState<'style' | 'fields' | 'actions'>('style')
+  const [activeTab, setActiveTab] = useState<'style' | 'fields'>('style')
   const [editingField, setEditingField] = useState<CustomField | null>(null)
+  const [newCueOptionByFieldId, setNewCueOptionByFieldId] = useState<Record<string, string>>({})
 
   const updateStyle = (styleUpdates: Partial<BlockStyle>) => {
     onUpdate({
@@ -58,17 +59,16 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
     return `#${toHex(nr)}${toHex(ng)}${toHex(nb)}`
   }
 
-  const addCustomField = () => {
+  const addCustomField = (type: 'text' | 'cue') => {
     const newField: CustomField = {
       id: `field-${Date.now()}`,
-      type: 'text',
-      label: 'Nuevo Campo',
+      type,
+      label: type === 'text' ? 'Texto' : 'CUE',
       value: '',
-      placeholder: 'Ingresa valor...'
+      placeholder: type === 'text' ? 'Ingresa valor...' : undefined,
+      options: type === 'cue' ? [] : undefined,
     }
-    onUpdate({
-      customFields: [...(row.customFields || []), newField]
-    })
+    onUpdate({ customFields: [...(row.customFields || []), newField] })
   }
 
   const updateCustomField = (fieldId: string, updates: Partial<CustomField>) => {
@@ -129,17 +129,7 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
             <Settings className="h-4 w-4 inline mr-2" />
             Campos Personalizados
           </button>
-          <button
-            className={`px-6 py-3 text-sm font-medium ${
-              activeTab === 'actions' 
-                ? 'border-b-2 border-primary text-primary' 
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-            onClick={() => setActiveTab('actions')}
-          >
-            <Play className="h-4 w-4 inline mr-2" />
-            Acciones del Bloque
-          </button>
+          
         </div>
 
         {/* Content */}
@@ -183,9 +173,10 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
                         onClick={() => {
                           const base = preset.value
                           const soft = lightenToSoftFill(base)
+                          const readable = getReadableTextColor(soft)
                           updateStyle({
                             backgroundColor: soft,
-                            textColor: '#111827',
+                            textColor: readable,
                             borderColor: base,
                             borderWidth: 2,
                             borderRadius: 8,
@@ -208,9 +199,10 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
                       onChange={(e) => {
                         const base = e.target.value
                         const soft = lightenToSoftFill(base)
+                        const readable = getReadableTextColor(soft)
                         updateStyle({
                           backgroundColor: soft,
-                          textColor: '#111827',
+                          textColor: readable,
                           borderColor: base,
                           borderWidth: 2,
                           borderRadius: 8,
@@ -239,10 +231,16 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-medium">Campos Personalizados</h3>
-                <Button onClick={addCustomField}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Agregar Campo
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={() => addCustomField('text')} variant="outline">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Texto
+                  </Button>
+                  <Button onClick={() => addCustomField('cue')}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    CUE
+                  </Button>
+                </div>
               </div>
 
               {(!row.customFields || row.customFields.length === 0) ? (
@@ -259,7 +257,12 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
                             <Badge variant={field.type === 'cue' ? 'default' : 'secondary'}>
                               {field.type === 'cue' ? 'CUE' : 'TEXT'}
                             </Badge>
-                            <span className="font-medium">{field.label}</span>
+                            <Input
+                              value={field.label}
+                              onChange={(e) => updateCustomField(field.id, { label: e.target.value })}
+                              placeholder="Etiqueta"
+                              className="h-8 w-48"
+                            />
                           </div>
                           <div className="flex gap-2">
                             {field.type === 'cue' && field.actions && field.actions.length > 0 && (
@@ -274,13 +277,6 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
                             )}
                             <Button
                               size="sm"
-                              variant="outline"
-                              onClick={() => setEditingField(field)}
-                            >
-                              Editar
-                            </Button>
-                            <Button
-                              size="sm"
                               variant="destructive"
                               onClick={() => removeCustomField(field.id)}
                             >
@@ -290,27 +286,99 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
                         </div>
                       </CardHeader>
                       <CardContent className="pt-0">
-                        <div className="space-y-3">
-                          <div>
-                            <Label className="text-sm">Valor</Label>
-                            <Input
-                              value={field.value}
-                              onChange={(e) => updateCustomField(field.id, { value: e.target.value })}
-                              placeholder={field.placeholder}
-                            />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                          <div className="space-y-1">
+                            <Label className="text-sm">Tipo</Label>
+                            <Select
+                              value={field.type}
+                              onValueChange={(v) => updateCustomField(field.id, { type: v as 'text' | 'cue' })}
+                            >
+                              <SelectTrigger className="h-9">
+                                <SelectValue placeholder="Selecciona tipo" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="text">Texto</SelectItem>
+                                <SelectItem value="cue">CUE</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
-                          {field.type === 'cue' && field.actions && (
-                            <div>
-                              <Label className="text-sm">Acciones CUE ({field.actions.length})</Label>
-                              <div className="text-xs text-muted-foreground">
-                                {field.actions.map((action, index) => (
-                                  <span key={index}>
-                                    {action.action}
-                                    {index < field.actions!.length - 1 && ', '}
-                                  </span>
-                                ))}
-                              </div>
+
+                          {field.type === 'text' && (
+                            <div className="space-y-1 md:col-span-2">
+                              <Label className="text-sm">Valor</Label>
+                              <Input
+                                value={field.value}
+                                onChange={(e) => updateCustomField(field.id, { value: e.target.value })}
+                                placeholder={field.placeholder || 'Valor'}
+                              />
                             </div>
+                          )}
+
+                          {field.type === 'cue' && (
+                            <>
+                              <div className="space-y-2">
+                                <Label className="text-sm">Opciones</Label>
+                                <div className="flex gap-2">
+                                  <Input
+                                    value={newCueOptionByFieldId[field.id] || ''}
+                                    onChange={(e) => setNewCueOptionByFieldId({ ...newCueOptionByFieldId, [field.id]: e.target.value })}
+                                    placeholder="Nueva opción"
+                                    className="h-9"
+                                  />
+                                  <Button
+                                    onClick={() => {
+                                      const toAdd = (newCueOptionByFieldId[field.id] || '').trim()
+                                      if (!toAdd) return
+                                      const current = field.options || []
+                                      if (current.includes(toAdd)) return
+                                      updateCustomField(field.id, { options: [...current, toAdd] })
+                                      setNewCueOptionByFieldId({ ...newCueOptionByFieldId, [field.id]: '' })
+                                    }}
+                                  >
+                                    <Plus className="h-4 w-4 mr-1" />
+                                    Agregar
+                                  </Button>
+                                </div>
+                                {(field.options && field.options.length > 0) && (
+                                  <div className="flex flex-wrap gap-2">
+                                    {field.options.map(opt => (
+                                      <div key={opt} className="flex items-center gap-1 border rounded px-2 py-1 text-xs">
+                                        <span>{opt}</span>
+                                        <button
+                                          onClick={() => {
+                                            const updated = (field.options || []).filter(o => o !== opt)
+                                            updateCustomField(field.id, { options: updated })
+                                            if (field.value === opt) {
+                                              updateCustomField(field.id, { value: '' })
+                                            }
+                                          }}
+                                          title="Eliminar opción"
+                                          className="text-red-500 hover:text-red-600"
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="space-y-1 md:col-span-2">
+                                <Label className="text-sm">Seleccionada</Label>
+                                <Select
+                                  value={field.value}
+                                  onValueChange={(v) => updateCustomField(field.id, { value: v })}
+                                >
+                                  <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="Elegir" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {(field.options || []).map(opt => (
+                                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </>
                           )}
                         </div>
                       </CardContent>
@@ -321,16 +389,7 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
             </div>
           )}
 
-          {activeTab === 'actions' && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-medium">Acciones del Bloque</h3>
-              <div className="text-sm text-muted-foreground">
-                Las acciones del bloque se ejecutan cuando se hace clic en &quot;Ejecutar&quot; en la fila del rundown.
-                Actualmente hay {row.actions.length} acciones configuradas.
-              </div>
-              {/* Aquí podrías integrar el ActionEditor si quieres */}
-            </div>
-          )}
+          
         </div>
 
         {/* Footer */}

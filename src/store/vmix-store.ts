@@ -16,6 +16,8 @@ export interface RunOfShowStep {
   condition?: string
   description?: string
   actions: VMixAction[]
+  templateId?: string
+  customFields?: CustomField[]
 }
 
 export interface VMixAction {
@@ -45,6 +47,8 @@ interface VMixStore {
   
   // Plantillas personalizadas
   customTemplates: BlockTemplate[]
+  // Overrides de plantillas base por usuario (customFields)
+  templateOverrides: Record<string, CustomField[]>
   
   // Horarios del show
   showStartTime: string
@@ -77,6 +81,7 @@ interface VMixStore {
   addCustomTemplate: (template: BlockTemplate) => void
   removeCustomTemplate: (templateId: string) => void
   updateCustomTemplate: (templateId: string, updates: Partial<BlockTemplate>) => void
+  setTemplateOverride: (templateId: string, fields: CustomField[]) => void
 
   // Acciones horarios del show
   setShowStartTime: (time: string) => void
@@ -104,6 +109,8 @@ export interface CustomField {
   label: string
   value: string
   placeholder?: string
+  // Para campos CUE: lista de opciones del menú desplegable
+  options?: string[]
   actions?: VMixAction[] // Para campos CUE
 }
 
@@ -126,6 +133,7 @@ export interface RundownRow {
   order: number
   style?: BlockStyle
   customFields?: CustomField[]
+  templateId?: string
 }
 
 export interface RundownGrid {
@@ -154,6 +162,26 @@ const saveCustomTemplates = (templates: BlockTemplate[]) => {
   }
 }
 
+// Overrides por plantilla (para plantillas base) en localStorage
+const loadTemplateOverrides = (): Record<string, CustomField[]> => {
+  if (typeof window === 'undefined') return {}
+  try {
+    const stored = localStorage.getItem('vmix-template-overrides')
+    return stored ? JSON.parse(stored) : {}
+  } catch {
+    return {}
+  }
+}
+
+const saveTemplateOverrides = (overrides: Record<string, CustomField[]>) => {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem('vmix-template-overrides', JSON.stringify(overrides))
+  } catch {
+    // ignore
+  }
+}
+
 export const useVMixStore = create<VMixStore>((set, get) => ({
   connection: {
     ip: '',
@@ -165,6 +193,7 @@ export const useVMixStore = create<VMixStore>((set, get) => ({
   isRunning: false,
   currentStepIndex: -1,
   customTemplates: loadCustomTemplates(),
+  templateOverrides: loadTemplateOverrides(),
   showStartTime: '20:00',
   showEndTime: '22:00',
   currentBlockIndex: -1,
@@ -236,7 +265,9 @@ export const useVMixStore = create<VMixStore>((set, get) => ({
       notes: step.description,
       description: step.description,
       actions: step.actions,
-      order: state.rundown.rows.length
+      order: state.rundown.rows.length,
+      customFields: step.customFields,
+      templateId: step.templateId
     }
     return {
       rundown: {
@@ -246,12 +277,36 @@ export const useVMixStore = create<VMixStore>((set, get) => ({
     }
   }),
 
-  updateRow: (rowId: string, update: Partial<RundownRow>) => set(state => ({
-    rundown: {
-      ...state.rundown,
-      rows: state.rundown.rows.map(r => r.id === rowId ? { ...r, ...update } : r)
+  updateRow: (rowId: string, update: Partial<RundownRow>) => set(state => {
+    const rows = state.rundown.rows.map(r => r.id === rowId ? { ...r, ...update } : r)
+    const updatedRow = rows.find(r => r.id === rowId)
+
+    // Si se actualizaron customFields y hay templateId, persistir en plantilla o overrides
+    if (update.customFields && updatedRow?.templateId) {
+      const templateId = updatedRow.templateId
+      const isCustom = state.customTemplates.some(t => t.id === templateId)
+      if (isCustom) {
+        // Actualizar plantilla personalizada con los customFields por defecto
+        const template = state.customTemplates.find(t => t.id === templateId)!
+        state.updateCustomTemplate(templateId, { customFields: update.customFields })
+      } else {
+        // Guardar overrides para plantillas base
+        const newOverrides = { ...state.templateOverrides, [templateId]: update.customFields }
+        saveTemplateOverrides(newOverrides)
+        return {
+          rundown: { ...state.rundown, rows },
+          templateOverrides: newOverrides
+        }
+      }
     }
-  })),
+
+    return {
+      rundown: {
+        ...state.rundown,
+        rows
+      }
+    }
+  }),
 
   removeRow: (rowId: string) => set(state => ({
     rundown: {
@@ -304,6 +359,12 @@ export const useVMixStore = create<VMixStore>((set, get) => ({
     )
     saveCustomTemplates(newTemplates)
     return { customTemplates: newTemplates }
+  }),
+
+  setTemplateOverride: (templateId: string, fields: CustomField[]) => set(state => {
+    const updated = { ...state.templateOverrides, [templateId]: fields }
+    saveTemplateOverrides(updated)
+    return { templateOverrides: updated }
   }),
 
   // Acciones horarios del show

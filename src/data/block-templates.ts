@@ -1,4 +1,4 @@
-import { RunOfShowStep, VMixAction, BlockStyle } from '@/store/vmix-store'
+import { RunOfShowStep, VMixAction, BlockStyle, CustomField } from '@/store/vmix-store'
 
 export interface BlockTemplate {
   id: string
@@ -8,6 +8,8 @@ export interface BlockTemplate {
   category: string
   step: Omit<RunOfShowStep, 'id'>
   style?: BlockStyle
+  // Campos personalizados por defecto asociados a esta plantilla
+  customFields?: CustomField[]
 }
 
 export const BLOCK_TEMPLATES: BlockTemplate[] = [

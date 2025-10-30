@@ -14,7 +14,6 @@ import BlockEditor from '@/components/BlockEditor'
 import CueFieldEditor from '@/components/CueFieldEditor'
 import BlockCreatorCompact from '@/components/BlockCreatorCompact'
 import Timeline from '@/components/Timeline'
-import ThemeToggle from '@/components/ThemeToggle'
 import {
   DndContext,
   closestCenter,
@@ -176,7 +175,6 @@ export default function ShowPlanner() {
                 <div className="text-lg font-bold text-primary">{showEndTime}</div>
               </div>
 
-              <ThemeToggle />
             </div>
           </div>
         </div>
@@ -380,20 +378,48 @@ function SortableRow({
     transition,
   }
 
-  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
-  const desiredTextColor = (row as any).style?.textColor as string | undefined
-  const normalizedTextColor = (() => {
-    if (!desiredTextColor) return undefined
-    const darkish = ['#000', '#000000', '#111', '#111111', '#111827']
-    if (isDark && darkish.includes(desiredTextColor.toLowerCase())) {
-      return '#ffffff'
+  const ensureReadableTextColor = (bg?: string, text?: string): string | undefined => {
+    if (!bg && text) return text
+    if (!bg) return text
+    const parseHex = (hex: string) => {
+      const c = hex.replace('#', '')
+      const r = parseInt(c.substring(0, 2), 16) / 255
+      const g = parseInt(c.substring(2, 4), 16) / 255
+      const b = parseInt(c.substring(4, 6), 16) / 255
+      const lin = (u: number) => (u <= 0.03928 ? u / 12.92 : Math.pow((u + 0.055) / 1.055, 2.4))
+      const lr = lin(r), lg = lin(g), lb = lin(b)
+      return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb
     }
-    return desiredTextColor
-  })()
+    const toHex = (s: string) => {
+      if (!s) return undefined
+      const v = s.trim().toLowerCase()
+      if (v.startsWith('#') && (v.length === 7)) return v
+      return undefined
+    }
+    const bgHex = toHex(bg)
+    const txtHex = toHex(text || '')
+    if (!bgHex) return text
+    const Lbg = parseHex(bgHex)
+    const contrastWith = (txt: string) => {
+      const Ltxt = parseHex(txt)
+      const lighter = Math.max(Lbg, Ltxt)
+      const darker = Math.min(Lbg, Ltxt)
+      return (lighter + 0.05) / (darker + 0.05)
+    }
+    const darkTxt = '#111827'
+    const lightTxt = '#ffffff'
+    const pickBest = () => (contrastWith(darkTxt) >= contrastWith(lightTxt) ? darkTxt : lightTxt)
+    if (!txtHex) return pickBest()
+    return contrastWith(txtHex) >= 4.5 ? txtHex : pickBest()
+  }
+
+  const bgColor = (row as any).style?.backgroundColor as string | undefined
+  const configuredText = (row as any).style?.textColor as string | undefined
+  const effectiveText = ensureReadableTextColor(bgColor, configuredText)
 
   const rowVisualStyle: React.CSSProperties = {
-    ...(row as any).style?.backgroundColor ? { backgroundColor: (row as any).style.backgroundColor } : {},
-    ...(normalizedTextColor ? { color: normalizedTextColor } : {}),
+    ...(bgColor ? { backgroundColor: bgColor } : {}),
+    ...(effectiveText ? { color: effectiveText } : {}),
     ...(row as any).style?.borderColor ? { borderColor: (row as any).style.borderColor } : {},
     ...(row as any).style?.borderWidth !== undefined ? { borderWidth: (row as any).style.borderWidth, borderStyle: 'solid' } : {},
   }

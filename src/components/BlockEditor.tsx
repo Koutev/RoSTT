@@ -45,16 +45,19 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
     return yiq >= 140 ? '#111827' : '#ffffff'
   }
 
-  const lightenToSoftFill = (hex: string, factor: number = 0.85): string => {
-    // Mezcla el color con blanco. factor=0.85 implica 85% blanco + 15% color
+  const getSoftFill = (hex: string, weight: number = 0.85): string => {
+    // En light: mezcla con blanco (weight% blanco + (1-weight)% color)
+    // En dark: mezcla con negro (weight% negro + (1-weight)% color)
+    const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
     const clean = hex.replace('#', '')
     const r = parseInt(clean.substring(0, 2), 16)
     const g = parseInt(clean.substring(2, 4), 16)
     const b = parseInt(clean.substring(4, 6), 16)
-    const mix = (channel: number) => Math.round(255 * factor + channel * (1 - factor))
-    const nr = mix(r)
-    const ng = mix(g)
-    const nb = mix(b)
+    const mixLight = (channel: number) => Math.round(255 * weight + channel * (1 - weight))
+    const mixDark = (channel: number) => Math.round(0 * weight + channel * (1 - weight))
+    const nr = (isDark ? mixDark : mixLight)(r)
+    const ng = (isDark ? mixDark : mixLight)(g)
+    const nb = (isDark ? mixDark : mixLight)(b)
     const toHex = (n: number) => n.toString(16).padStart(2, '0')
     return `#${toHex(nr)}${toHex(ng)}${toHex(nb)}`
   }
@@ -172,11 +175,10 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
                         }}
                         onClick={() => {
                           const base = preset.value
-                          const soft = lightenToSoftFill(base)
-                          const readable = getReadableTextColor(soft)
+                          const soft = getSoftFill(base)
                           updateStyle({
                             backgroundColor: soft,
-                            textColor: readable,
+                            textColor: undefined,
                             borderColor: base,
                             borderWidth: 2,
                             borderRadius: 8,
@@ -198,11 +200,10 @@ export default function BlockEditor({ row, onUpdate, onClose }: BlockEditorProps
                       defaultValue={row.style?.borderColor || '#0ea5e9'}
                       onChange={(e) => {
                         const base = e.target.value
-                        const soft = lightenToSoftFill(base)
-                        const readable = getReadableTextColor(soft)
+                        const soft = getSoftFill(base)
                         updateStyle({
                           backgroundColor: soft,
-                          textColor: readable,
+                          textColor: undefined,
                           borderColor: base,
                           borderWidth: 2,
                           borderRadius: 8,

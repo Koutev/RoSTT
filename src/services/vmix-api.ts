@@ -206,24 +206,29 @@ class VMixAPI {
     }
   }
 
-  async sendCommand(action: string, input?: string, value?: string): Promise<boolean> {
+  async sendCommand(action: string, input?: string, value?: string, extraParams?: Record<string, string | number | boolean>): Promise<boolean> {
     try {
       let url: string
-      
+      const params = new URLSearchParams()
+
       if (this.useProxy) {
-        const params = new URLSearchParams({
-          ip: this.ip,
-          port: this.port.toString(),
-          Function: action
-        })
-        if (input) params.append('Input', input)
-        if (value) params.append('Value', value)
-        url = `${this.baseURL}?${params.toString()}`
-      } else {
-        url = `${this.baseURL}?Function=${action}`
-        if (input) url += `&Input=${input}`
-        if (value) url += `&Value=${value}`
+        params.append('ip', this.ip)
+        params.append('port', this.port.toString())
       }
+
+      // Parámetros estándar
+      params.append('Function', action)
+      if (input) params.append('Input', input)
+      if (value) params.append('Value', value)
+      // Parámetros extra (Duration, etc.)
+      if (extraParams) {
+        Object.entries(extraParams).forEach(([k, v]) => {
+          if (v === undefined || v === null) return
+          params.append(k, String(v))
+        })
+      }
+
+      url = `${this.baseURL}?${params.toString()}`
 
       const response = await axios.get(url, { timeout: 5000 })
       return response.status === 200

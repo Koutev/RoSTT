@@ -5,10 +5,9 @@ export async function GET(request: NextRequest) {
   const ip = searchParams.get('ip')
   const port = searchParams.get('port')
   const functionParam = searchParams.get('Function')
-  const inputParam = searchParams.get('Input')
-  const valueParam = searchParams.get('Value')
 
-  console.log(`[VMix Proxy] Request received:`, { ip, port, functionParam, inputParam, valueParam })
+  // Log mínimo para depuración (no logueamos todos los params por privacidad)
+  console.log(`[VMix Proxy] Request received:`, { ip, port, Function: functionParam })
 
   if (!ip || !port) {
     console.log(`[VMix Proxy] Missing IP or port`)
@@ -22,11 +21,13 @@ export async function GET(request: NextRequest) {
     // Formato correcto según documentación oficial: http://IP:PORT/api/
     let vmixUrl = `http://${ip}:${port}/api/`
     
-    // Agregar parámetros si existen
+    // Reenviar TODOS los parámetros (excepto ip y port) para soportar Duration y otros
     const params = new URLSearchParams()
-    if (functionParam) params.append('Function', functionParam)
-    if (inputParam) params.append('Input', inputParam)
-    if (valueParam) params.append('Value', valueParam)
+    for (const [key, value] of Array.from(searchParams.entries())) {
+      if (key === 'ip' || key === 'port') continue
+      if (!value) continue
+      params.append(key, value)
+    }
     
     if (params.toString()) {
       vmixUrl += `?${params.toString()}`

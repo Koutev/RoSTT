@@ -9,6 +9,21 @@ export default function Timeline() {
   const [timeRemaining, setTimeRemaining] = useState<number>(0)
   const [totalDuration, setTotalDuration] = useState<number>(0)
 
+  // Obtener todos los bloques (excluyendo ITEMs, incluyendo sus children)
+  const getAllBlocks = () => {
+    const allBlocks: typeof rundown.rows = []
+    for (const row of rundown.rows) {
+      if (row.type === 'item') {
+        if (row.children) {
+          allBlocks.push(...row.children)
+        }
+      } else {
+        allBlocks.push(row)
+      }
+    }
+    return allBlocks
+  }
+
   // Función para convertir duración a segundos
   const parseDurationToSeconds = (duration: string): number => {
     const parts = duration.split(':').map(Number)
@@ -43,7 +58,8 @@ export default function Timeline() {
     let intervalId: NodeJS.Timeout | null = null
 
     if (showStatus === 'running' && currentBlockIndex >= 0) {
-      const currentBlock = rundown.rows[currentBlockIndex]
+      const allBlocks = getAllBlocks()
+      const currentBlock = allBlocks[currentBlockIndex]
       if (currentBlock && currentBlock.duration) {
         const durationInSeconds = parseDurationToSeconds(currentBlock.duration)
         setTotalDuration(durationInSeconds)
@@ -78,7 +94,8 @@ export default function Timeline() {
   // Reset cuando cambia el bloque actual
   useEffect(() => {
     if (currentBlockIndex >= 0 && showStatus === 'running') {
-      const currentBlock = rundown.rows[currentBlockIndex]
+      const allBlocks = getAllBlocks()
+      const currentBlock = allBlocks[currentBlockIndex]
       if (currentBlock && currentBlock.duration) {
         const durationInSeconds = parseDurationToSeconds(currentBlock.duration)
         setTotalDuration(durationInSeconds)
@@ -92,7 +109,8 @@ export default function Timeline() {
     return null
   }
 
-  const currentBlock = currentBlockIndex >= 0 ? rundown.rows[currentBlockIndex] : null
+  const allBlocks = getAllBlocks()
+  const currentBlock = currentBlockIndex >= 0 ? allBlocks[currentBlockIndex] : null
   const progress = getProgress()
 
   return (
@@ -164,6 +182,7 @@ export default function Timeline() {
     </div>
   )
 }
+
 
 
 

@@ -8,7 +8,19 @@ class ShowTimer {
 
   startBlockTimer(blockIndex: number): void {
     const state = useVMixStore.getState()
-    const block = state.rundown.rows[blockIndex]
+    // Obtener todos los bloques (excluyendo ITEMs, incluyendo sus children)
+    const allBlocks: any[] = []
+    for (const row of state.rundown.rows) {
+      if (row.type === 'item') {
+        if (row.children) {
+          allBlocks.push(...row.children)
+        }
+      } else {
+        allBlocks.push(row)
+      }
+    }
+    
+    const block = allBlocks[blockIndex]
     
     if (!block || !block.duration) {
       console.warn('Bloque sin duración, pasando al siguiente')
@@ -89,7 +101,19 @@ class ShowTimer {
   resumeTimer(): void {
     const state = useVMixStore.getState()
     if (state.showStatus === 'running' && state.currentBlockIndex >= 0) {
-      const block = state.rundown.rows[state.currentBlockIndex]
+      // Obtener todos los bloques (excluyendo ITEMs, incluyendo sus children)
+      const allBlocks: any[] = []
+      for (const row of state.rundown.rows) {
+        if (row.type === 'item') {
+          if (row.children) {
+            allBlocks.push(...row.children)
+          }
+        } else {
+          allBlocks.push(row)
+        }
+      }
+      
+      const block = allBlocks[state.currentBlockIndex]
       if (block && block.duration) {
         // Calcular tiempo restante
         const elapsed = Date.now() - this.currentBlockStartTime
@@ -125,6 +149,7 @@ class ShowTimer {
 }
 
 export const showTimer = new ShowTimer()
+
 
 
 

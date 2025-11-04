@@ -71,7 +71,7 @@ interface VMixStore {
   setCurrentStepIndex: (index: number) => void
 
   // Acciones rundown grid
-  addRowFromRunOfShow: (step: RunOfShowStep) => void
+  addRowFromRunOfShow: (step: RunOfShowStep, parentItemId?: string) => void
   updateRow: (rowId: string, update: Partial<RundownRow>) => void
   removeRow: (rowId: string) => void
   reorderRows: (oldIndex: number, newIndex: number) => void
@@ -95,6 +95,12 @@ interface VMixStore {
   resumeShow: () => void
   stopShow: () => void
   nextBlock: () => void
+
+  // Acciones ITEMs
+  addItem: () => string // Retorna el ID del ITEM creado
+  toggleItemExpanded: (itemId: string) => void
+  addBlockToItem: (itemId: string, step: RunOfShowStep) => void
+  removeBlockFromItem: (itemId: string, blockId: string) => void
 }
 
 export interface RundownColumn {
@@ -134,6 +140,11 @@ export interface RundownRow {
   style?: BlockStyle
   customFields?: CustomField[]
   templateId?: string
+  // Para ITEMs: contiene otros bloques
+  type?: 'block' | 'item'
+  isExpanded?: boolean
+  children?: RundownRow[] // Bloques dentro del ITEM
+  parentId?: string // ID del ITEM padre si este bloque está dentro de uno
 }
 
 export interface RundownGrid {
@@ -256,7 +267,7 @@ export const useVMixStore = create<VMixStore>((set, get) => ({
     set({ currentStepIndex: index }),
 
   // Rundown grid actions
-  addRowFromRunOfShow: (step: RunOfShowStep) => set(state => {
+  addRowFromRunOfShow: (step: RunOfShowStep, parentItemId?: string) => set(state => {
     const newRow: RundownRow = {
       id: `row-${Date.now()}`,
       title: step.title,
@@ -267,8 +278,30 @@ export const useVMixStore = create<VMixStore>((set, get) => ({
       actions: step.actions,
       order: state.rundown.rows.length,
       customFields: step.customFields,
-      templateId: step.templateId
+      templateId: step.templateId,
+      type: 'block',
+      parentId: parentItemId
     }
+
+    // Si hay un parentItemId, agregar el bloque dentro del ITEM
+    if (parentItemId) {
+      const rows = state.rundown.rows.map(row => {
+        if (row.id === parentItemId && row.type === 'item') {
+          return {
+            ...row,
+            children: [...(row.children || []), newRow]
+          }
+        }
+        return row
+      })
+      return {
+        rundown: {
+          ...state.rundown,
+          rows
+        }
+      }
+    }
+
     return {
       rundown: {
         ...state.rundown,
@@ -308,12 +341,48 @@ export const useVMixStore = create<VMixStore>((set, get) => ({
     }
   }),
 
-  removeRow: (rowId: string) => set(state => ({
-    rundown: {
-      ...state.rundown,
-      rows: state.rundown.rows.filter(r => r.id !== rowId)
+  removeRow: (rowId: string) => set(state => {
+    // Primero buscar si el bloque está dentro de un ITEM
+    let foundInItem = false
+    let parentItemId: string | undefined = undefined
+    
+    for (const row of state.rundown.rows) {
+      if (row.type === 'item' && row.children) {
+        const childIndex = row.children.findIndex(child => child.id === rowId)
+        if (childIndex !== -1) {
+          foundInItem = true
+          parentItemId = row.id
+          break
+        }
+      }
     }
-  })),
+    
+    // Si está dentro de un ITEM, eliminar del array children
+    if (foundInItem && parentItemId) {
+      return {
+        rundown: {
+          ...state.rundown,
+          rows: state.rundown.rows.map(row => {
+            if (row.id === parentItemId && row.type === 'item') {
+              return {
+                ...row,
+                children: (row.children || []).filter(child => child.id !== rowId)
+              }
+            }
+            return row
+          })
+        }
+      }
+    }
+    
+    // Si no está dentro de un ITEM, eliminar de rows directamente
+    return {
+      rundown: {
+        ...state.rundown,
+        rows: state.rundown.rows.filter(r => r.id !== rowId)
+      }
+    }
+  }),
 
   reorderRows: (oldIndex: number, newIndex: number) => set(state => {
     const newRows = [...state.rundown.rows]
@@ -377,13 +446,25 @@ export const useVMixStore = create<VMixStore>((set, get) => ({
 
   setShowStatus: (status: 'idle' | 'running' | 'paused' | 'completed') => set({ showStatus: status }),
 
-  startShow: () => set(state => {
-    if (state.rundown.rows.length === 0) return state
+  startShow: () => {
+    const state = get()
+    // Obtener todos los bloques (excluyendo ITEMs, incluyendo sus children)
+    const allBlocks: RundownRow[] = []
+    for (const row of state.rundown.rows) {
+      if (row.type === 'item') {
+        if (row.children) {
+          allBlocks.push(...row.children)
+        }
+      } else {
+        allBlocks.push(row)
+      }
+    }
+    if (allBlocks.length === 0) return state
     return {
       showStatus: 'running',
       currentBlockIndex: 0
     }
-  }),
+  },
 
   pauseShow: () => set({ showStatus: 'paused' }),
 
@@ -394,8 +475,21 @@ export const useVMixStore = create<VMixStore>((set, get) => ({
     currentBlockIndex: -1
   }),
 
-  nextBlock: () => set(state => {
-    if (state.currentBlockIndex < state.rundown.rows.length - 1) {
+  nextBlock: () => {
+    const state = get()
+    // Obtener todos los bloques (excluyendo ITEMs, incluyendo sus children)
+    const allBlocks: RundownRow[] = []
+    for (const row of state.rundown.rows) {
+      if (row.type === 'item') {
+        if (row.children) {
+          allBlocks.push(...row.children)
+        }
+      } else {
+        allBlocks.push(row)
+      }
+    }
+    
+    if (state.currentBlockIndex < allBlocks.length - 1) {
       return {
         currentBlockIndex: state.currentBlockIndex + 1
       }
@@ -405,7 +499,85 @@ export const useVMixStore = create<VMixStore>((set, get) => ({
         currentBlockIndex: -1
       }
     }
-  })
+  },
+
+  // Acciones ITEMs
+  addItem: () => {
+    const itemId = `item-${Date.now()}`
+    const existingItems = get().rundown.rows.filter(r => r.type === 'item').length
+    const newItem: RundownRow = {
+      id: itemId,
+      title: `SEGMENTO ${existingItems + 1}`,
+      duration: '00:00',
+      actions: [],
+      order: get().rundown.rows.length,
+      type: 'item',
+      isExpanded: true,
+      children: []
+    }
+    set(state => ({
+      rundown: {
+        ...state.rundown,
+        rows: [...state.rundown.rows, newItem]
+      }
+    }))
+    return itemId
+  },
+
+  toggleItemExpanded: (itemId: string) => set(state => ({
+    rundown: {
+      ...state.rundown,
+      rows: state.rundown.rows.map(row =>
+        row.id === itemId ? { ...row, isExpanded: !row.isExpanded } : row
+      )
+    }
+  })),
+
+  addBlockToItem: (itemId: string, step: RunOfShowStep) => {
+    const newRow: RundownRow = {
+      id: `row-${Date.now()}`,
+      title: step.title,
+      time: undefined,
+      duration: step.duration || '2:00',
+      notes: step.description,
+      description: step.description,
+      actions: step.actions,
+      order: 0,
+      customFields: step.customFields,
+      templateId: step.templateId,
+      type: 'block',
+      parentId: itemId
+    }
+    set(state => ({
+      rundown: {
+        ...state.rundown,
+        rows: state.rundown.rows.map(row => {
+          if (row.id === itemId && row.type === 'item') {
+            return {
+              ...row,
+              children: [...(row.children || []), newRow]
+            }
+          }
+          return row
+        })
+      }
+    }))
+  },
+
+  removeBlockFromItem: (itemId: string, blockId: string) => set(state => ({
+    rundown: {
+      ...state.rundown,
+      rows: state.rundown.rows.map(row => {
+        if (row.id === itemId && row.type === 'item') {
+          return {
+            ...row,
+            children: (row.children || []).filter(child => child.id !== blockId)
+          }
+        }
+        return row
+      })
+    }
+  }))
 }))
 
 // Funciones utilitarias para manejo de tiempo (formato 24 horas)

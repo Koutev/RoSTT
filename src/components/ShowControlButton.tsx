@@ -36,7 +36,19 @@ export default function ShowControlButton() {
   }, [showStatus, currentBlockIndex])
 
   const handleStart = () => {
-    if (rundown.rows.length === 0) {
+    // Obtener todos los bloques (excluyendo ITEMs, incluyendo sus children)
+    const allBlocks: typeof rundown.rows = []
+    for (const row of rundown.rows) {
+      if (row.type === 'item') {
+        if (row.children) {
+          allBlocks.push(...row.children)
+        }
+      } else {
+        allBlocks.push(row)
+      }
+    }
+    
+    if (allBlocks.length === 0) {
       alert('No hay bloques en el rundown para ejecutar')
       return
     }
@@ -127,7 +139,18 @@ export default function ShowControlButton() {
 
   const getStatusText = () => {
     if (showStatus === 'running' && currentBlockIndex >= 0) {
-      const currentBlock = rundown.rows[currentBlockIndex]
+      // Obtener todos los bloques (excluyendo ITEMs, incluyendo sus children)
+      const allBlocks: typeof rundown.rows = []
+      for (const row of rundown.rows) {
+        if (row.type === 'item') {
+          if (row.children) {
+            allBlocks.push(...row.children)
+          }
+        } else {
+          allBlocks.push(row)
+        }
+      }
+      const currentBlock = allBlocks[currentBlockIndex]
       return `Ejecutando: ${currentBlock?.title || 'Bloque desconocido'}`
     }
     
@@ -155,6 +178,7 @@ export default function ShowControlButton() {
     </div>
   )
 }
+
 
 
 

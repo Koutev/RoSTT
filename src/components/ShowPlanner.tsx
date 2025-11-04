@@ -6,8 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useVMixStore, RunOfShowStep, VMixAction, calculateEndTime } from '@/store/vmix-store'
-import { Plus, Trash2, Play, ArrowUp, ArrowDown, Settings, GripVertical } from 'lucide-react'
+import { useVMixStore, RunOfShowStep, VMixAction, calculateEndTime, RundownRow } from '@/store/vmix-store'
+import { Plus, Trash2, Play, ArrowUp, ArrowDown, Settings, GripVertical, ChevronDown, ChevronRight, Hash } from 'lucide-react'
 import { automationEngine } from '@/services/automation-engine'
 import ActionEditor from '@/components/ActionEditor'
 import BlockEditor from '@/components/BlockEditor'
@@ -35,7 +35,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 
 export default function ShowPlanner() {
-  const { rundown, addRowFromRunOfShow, reorderRows, updateRow, removeRow, addConsoleLog, showStartTime, showEndTime, setShowStartTime, setShowEndTime, showStatus, currentBlockIndex } = useVMixStore()
+  const { rundown, addRowFromRunOfShow, reorderRows, updateRow, removeRow, addConsoleLog, showStartTime, showEndTime, setShowStartTime, setShowEndTime, showStatus, currentBlockIndex, addItem, toggleItemExpanded, addBlockToItem } = useVMixStore()
   const [editingBlock, setEditingBlock] = useState<string | null>(null)
   const [editingActionsRowId, setEditingActionsRowId] = useState<string | null>(null)
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
@@ -126,9 +126,27 @@ export default function ShowPlanner() {
     }
   }
 
+  // Obtener todos los bloques del rundown (incluyendo los que están dentro de ITEMs)
+  const getAllBlocks = () => {
+    const allBlocks: typeof rundown.rows = []
+    for (const row of rundown.rows) {
+      if (row.type === 'item') {
+        // Si es un ITEM, agregar solo sus bloques hijos (no el ITEM en sí)
+        if (row.children) {
+          allBlocks.push(...row.children)
+        }
+      } else {
+        // Si es un bloque normal, agregarlo
+        allBlocks.push(row)
+      }
+    }
+    return allBlocks
+  }
+
   // Recalcular horario de finalización cuando cambie la duración total
   useEffect(() => {
-    const totalDuration = calcTotalDuration(rundown.rows)
+    const allBlocks = getAllBlocks()
+    const totalDuration = calcTotalDuration(allBlocks)
     const calculatedEndTime = calculateEndTime(showStartTime, totalDuration)
     setShowEndTime(calculatedEndTime)
   }, [rundown.rows, showStartTime, setShowEndTime])
@@ -157,7 +175,7 @@ export default function ShowPlanner() {
             <div className="flex items-center gap-6">
               <div className="text-center">
                 <div className="text-sm text-muted-foreground">Duración Total</div>
-                <div className="text-lg font-bold text-primary">{calcTotalDuration(rundown.rows)}</div>
+                <div className="text-lg font-bold text-primary">{calcTotalDuration(getAllBlocks())}</div>
               </div>
               
               <div className="text-center">
@@ -251,33 +269,53 @@ export default function ShowPlanner() {
                         <div className="relative overflow-visible">
                           <div className="space-y-3">
                             <p>Aún no hay bloques en tu rundown</p>
-                            <BlockCreatorCompact onAddBlock={handleAddBlock} />
+                            <BlockCreatorCompact onAddBlock={handleAddBlock} onAddItem={() => addItem()} />
                           </div>
                         </div>
                       </td>
                     </tr>
                   ) : (
-                    <SortableContext items={rundown.rows.map(row => row.id)} strategy={verticalListSortingStrategy}>
-                      {rundown.rows.map((row, index) => (
-                        <SortableRow
-                          key={row.id}
-                          row={row}
-                          index={index}
-                          currentBlockIndex={currentBlockIndex}
-                          showStatus={showStatus}
-                          onEdit={setEditingBlock}
-                          onRemove={removeRow}
-                          onUpdateRow={updateRow}
-                          onEditCueField={handleEditRowActions}
-                          onExecuteRow={handleExecuteRow}
-                        />
-                      ))}
+                    <SortableContext items={rundown.rows.filter(r => !r.parentId).map(row => row.id)} strategy={verticalListSortingStrategy}>
+                      {rundown.rows.filter(r => !r.parentId).map((row, index) => {
+                        // Calcular el índice real del bloque considerando bloques dentro de ITEMs anteriores
+                        let realIndex = 0
+                        for (let i = 0; i < index; i++) {
+                          const prevRow = rundown.rows.filter(r => !r.parentId)[i]
+                          if (prevRow.type === 'item' && prevRow.children) {
+                            realIndex += prevRow.children.length
+                          } else {
+                            realIndex += 1
+                          }
+                        }
+                        // Si es un ITEM, no incrementar el índice real
+                        const isItem = row.type === 'item'
+                        const blockIndex = isItem ? -1 : realIndex
+                        
+                        return (
+                          <SortableRow
+                            key={row.id}
+                            row={row}
+                            index={index}
+                            currentBlockIndex={currentBlockIndex}
+                            showStatus={showStatus}
+                            onEdit={setEditingBlock}
+                            onRemove={removeRow}
+                            onUpdateRow={updateRow}
+                            onEditCueField={handleEditRowActions}
+                            onExecuteRow={handleExecuteRow}
+                            onToggleItem={row.type === 'item' ? () => toggleItemExpanded(row.id) : undefined}
+                            onAddBlockToItem={row.type === 'item' ? (step) => addBlockToItem(row.id, step) : undefined}
+                            allBlocks={getAllBlocks()}
+                            blockRealIndex={blockIndex}
+                          />
+                        )
+                      })}
                       
-                      {/* Fila para agregar más bloques */}
+                      {/* Fila para agregar más bloques o ITEMs */}
                       <tr>
                         <td colSpan={6} className="border px-2 py-4 text-center">
-                          <div className="relative overflow-visible">
-                            <BlockCreatorCompact onAddBlock={handleAddBlock} />
+                          <div className="relative overflow-visible flex items-center justify-center">
+                            <BlockCreatorCompact onAddBlock={handleAddBlock} onAddItem={() => addItem()} />
                           </div>
                         </td>
                       </tr>
@@ -351,6 +389,8 @@ interface SortableRowProps {
   onUpdateRow: (rowId: string, updates: Partial<RunOfShowStep>) => void
   onEditCueField: (rowId: string, fieldId: string) => void
   onExecuteRow: (row: RunOfShowStep) => void
+  onToggleItem?: () => void
+  onAddBlockToItem?: (step: RunOfShowStep) => void
 }
 
 function SortableRow({ 
@@ -362,8 +402,32 @@ function SortableRow({
   onRemove, 
   onUpdateRow, 
   onEditCueField,
-  onExecuteRow
+  onExecuteRow,
+  onToggleItem,
+  onAddBlockToItem,
+  allBlocks = [],
+  blockRealIndex = -1
 }: SortableRowProps) {
+  const isItem = (row as RundownRow).type === 'item'
+  const itemRow = row as RundownRow
+  const isExpanded = itemRow.isExpanded ?? true
+  const children = itemRow.children || []
+  
+  // Calcular el índice real para bloques dentro de ITEMs
+  const getBlockRealIndex = (childIndex: number): number => {
+    if (blockRealIndex >= 0) {
+      return blockRealIndex + childIndex + 1
+    }
+    // Si el ITEM no tiene índice real, calcular desde el inicio
+    let count = 0
+    const allBlocksList = allBlocks.length > 0 ? allBlocks : []
+    // Buscar la posición del ITEM en la lista de bloques
+    for (let i = 0; i < index; i++) {
+      // Esto ya se calculó arriba, usar blockRealIndex
+    }
+    return blockRealIndex + childIndex + 1
+  }
+  
   const {
     attributes,
     listeners,
@@ -424,14 +488,16 @@ function SortableRow({
     ...(row as any).style?.borderWidth !== undefined ? { borderWidth: (row as any).style.borderWidth, borderStyle: 'solid' } : {},
   }
 
-  const isCurrentBlock = showStatus !== 'idle' && showStatus !== 'completed' && currentBlockIndex === index
+  const isCurrentBlock = !isItem && showStatus !== 'idle' && showStatus !== 'completed' && blockRealIndex >= 0 && currentBlockIndex === blockRealIndex
 
   return (
+    <>
     <tr
-      ref={setNodeRef}
-      style={{ ...style, ...rowVisualStyle }}
-      className={`hover:bg-muted/50 ${isCurrentBlock ? 'bg-red-100 border-red-500 border-2' : ''} ${isDragging ? 'opacity-50' : ''}`}
+      ref={isItem ? undefined : setNodeRef}
+      style={isItem ? { ...style, backgroundColor: 'var(--muted)', borderTop: '2px solid var(--primary)', borderBottom: '2px solid var(--primary)' } : { ...style, ...rowVisualStyle }}
+      className={`${isItem ? 'bg-muted/70 border-y-2 border-primary/30 font-semibold' : `hover:bg-muted/50 ${isCurrentBlock ? 'bg-red-100 border-red-500 border-2' : ''}`} ${isDragging ? 'opacity-50' : ''}`}
     >
+      {!isItem && (
       <td className="border px-2 py-1">
         <div className="flex flex-col items-start gap-1">
           <div className="flex items-center gap-2">
@@ -461,19 +527,63 @@ function SortableRow({
           </Button>
         </div>
       </td>
-      <td className="border px-2 py-1">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
+      )}
+      <td className="border px-2 py-1" colSpan={isItem ? 6 : 1}>
+        {isItem ? (
+          /* Renderizado especial para ITEM/Separador */
+          <div className="flex items-center gap-3 py-2.5">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleItem?.()
+              }}
+              className="p-1.5 hover:bg-background/50 rounded transition-colors"
+              title={isExpanded ? 'Colapsar' : 'Expandir'}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-5 w-5 text-primary" />
+              ) : (
+                <ChevronRight className="h-5 w-5 text-primary" />
+              )}
+            </button>
+            <Hash className="h-5 w-5 text-primary" />
             <Input 
               value={row.title} 
               onChange={(e) => onUpdateRow(row.id, { title: e.target.value })} 
-              className="font-semibold text-sm flex-1"
+              className="font-bold text-base flex-1 border-none bg-transparent focus-visible:ring-1 focus-visible:ring-primary/20 focus-visible:ring-offset-0 px-2 py-1 rounded hover:bg-background/30"
+              placeholder="SEGMENTO 1"
             />
-            {isCurrentBlock && (
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+            {isExpanded && (
+              <Badge variant="secondary" className="text-xs">
+                {children.length} bloques
+              </Badge>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRemove(row.id)
+              }}
+              className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
-          {row.customFields && row.customFields.length > 0 && (
+        ) : (
+          /* Renderizado normal para bloques */
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Input 
+                value={row.title} 
+                onChange={(e) => onUpdateRow(row.id, { title: e.target.value })} 
+                className="font-semibold text-sm flex-1"
+              />
+              {isCurrentBlock && (
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+              )}
+            </div>
+            {row.customFields && row.customFields.length > 0 && (
             <>
               {row.customFields.length >= 3 && (
                 <div className="h-px bg-border" />
@@ -518,69 +628,219 @@ function SortableRow({
               </div>
             </>
           )}
-        </div>
-      </td>
-      <td className="border px-2 py-1 text-center">
-        <span className="text-sm text-muted-foreground">
-          {calcTotalDuration([row])}
-        </span>
-      </td>
-      <td className="border px-2 py-1">
-        <Input 
-          value={row.duration || ''} 
-          onChange={(e) => onUpdateRow(row.id, { duration: e.target.value })} 
-          placeholder="02:00"
-          className="w-20"
-        />
-      </td>
-      <td className="border px-2 py-1">
-        <Textarea 
-          value={row.description || ''} 
-          onChange={(e) => onUpdateRow(row.id, { description: e.target.value })} 
-          placeholder="Notas del bloque..."
-          className="min-h-[60px] resize-none"
-        />
-      </td>
-      <td className="border px-2 py-1">
-        <div className="space-y-2">
-          <div className="flex items-center gap-1 flex-wrap">
-            {row.actions.map((action, actionIndex) => (
-              <Badge key={actionIndex} variant="secondary" className="text-xs">
-                {action.action}
-              </Badge>
-            ))}
           </div>
-          <div className="flex gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onEditCueField(row.id, 'actions')}
-              className="text-xs h-6 px-2"
-            >
-              <Plus className="h-3 w-3 mr-1" />
-              Acción
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onExecuteRow(row)}
-              className="text-xs h-6 px-2"
-            >
-              <Play className="h-3 w-3 mr-1" />
-              Ejecutar
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onRemove(row.id)}
-              className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        )}
       </td>
-    </tr>
+      {!isItem && (
+        <>
+          <td className="border px-2 py-1 text-center">
+            <span className="text-sm text-muted-foreground">
+              {calcTotalDuration([row])}
+            </span>
+          </td>
+          <td className="border px-2 py-1">
+            <Input 
+              value={row.duration || ''} 
+              onChange={(e) => onUpdateRow(row.id, { duration: e.target.value })} 
+              placeholder="02:00"
+              className="w-20"
+            />
+          </td>
+          <td className="border px-2 py-1">
+            <Textarea 
+              value={row.description || ''} 
+              onChange={(e) => onUpdateRow(row.id, { description: e.target.value })} 
+              placeholder="Notas del bloque..."
+              className="min-h-[60px] resize-none"
+            />
+          </td>
+          <td className="border px-2 py-1">
+            <div className="space-y-2">
+              <div className="flex items-center gap-1 flex-wrap">
+                {row.actions.map((action, actionIndex) => (
+                  <Badge key={actionIndex} variant="secondary" className="text-xs">
+                    {action.action}
+                  </Badge>
+                ))}
+              </div>
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onEditCueField(row.id, 'actions')}
+                  className="text-xs h-6 px-2"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Acción
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onExecuteRow(row)}
+                  className="text-xs h-6 px-2"
+                >
+                  <Play className="h-3 w-3 mr-1" />
+                  Ejecutar
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRemove(row.id)}
+                  className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </td>
+        </>
+      )}
+      </tr>
+      {isItem && isExpanded && (
+        <>
+          {children.length > 0 && children.map((child, childIndex) => {
+            const childRealIndex = blockRealIndex >= 0 ? blockRealIndex + childIndex + 1 : -1
+            const isChildCurrentBlock = showStatus !== 'idle' && showStatus !== 'completed' && currentBlockIndex === childRealIndex
+            
+            return (
+            <tr key={child.id} className={`bg-muted/20 ${isChildCurrentBlock ? 'bg-red-100 border-red-500 border-2' : ''}`}>
+            <td className="border px-2 py-1">
+              <div className="flex items-center gap-2 pl-8">
+                <span className="text-xs text-muted-foreground">
+                  {childRealIndex >= 0 ? childRealIndex + 1 : `${index + 1}.${childIndex + 1}`}
+                </span>
+              </div>
+            </td>
+            <td className="border px-2 py-1">
+              <div className="flex flex-col gap-2 pl-8">
+                <div className="flex items-center gap-2">
+                  <Input 
+                    value={child.title} 
+                    onChange={(e) => onUpdateRow(child.id, { title: e.target.value })} 
+                    className="font-semibold text-sm flex-1"
+                  />
+                  {isChildCurrentBlock && (
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                  )}
+                </div>
+                {child.customFields && child.customFields.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 text-xs pl-6">
+                    {child.customFields.map((field) => (
+                      <div key={field.id} className="flex items-center gap-1">
+                        {field.type === 'cue' && (
+                          <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">CUE</Badge>
+                        )}
+                        <span className="text-[10px] text-muted-foreground">{field.label}</span>
+                        {field.type === 'text' ? (
+                          <Input
+                            value={field.value}
+                            onChange={(e) => {
+                              const updated = (child.customFields || []).map(f => f.id === field.id ? { ...f, value: e.target.value } : f)
+                              onUpdateRow(child.id, { customFields: updated as any })
+                            }}
+                            className="h-7 text-[11px] w-40"
+                            placeholder={field.placeholder || ''}
+                          />
+                        ) : (
+                          <Select
+                            value={field.value}
+                            onValueChange={(v) => {
+                              const updated = (child.customFields || []).map(f => f.id === field.id ? { ...f, value: v } : f)
+                              onUpdateRow(child.id, { customFields: updated as any })
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-[11px] px-2 py-0 w-40">
+                              <SelectValue placeholder="Elegir" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(field.options || []).map(opt => (
+                                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </td>
+            <td className="border px-2 py-1 text-center">
+              <span className="text-sm text-muted-foreground">
+                {calcTotalDuration([child])}
+              </span>
+            </td>
+            <td className="border px-2 py-1">
+              <Input 
+                value={child.duration || ''} 
+                onChange={(e) => onUpdateRow(child.id, { duration: e.target.value })} 
+                placeholder="02:00"
+                className="w-20"
+              />
+            </td>
+            <td className="border px-2 py-1">
+              <Textarea 
+                value={child.description || ''} 
+                onChange={(e) => onUpdateRow(child.id, { description: e.target.value })} 
+                placeholder="Notas del bloque..."
+                className="min-h-[60px] resize-none"
+              />
+            </td>
+            <td className="border px-2 py-1">
+              <div className="space-y-2">
+                <div className="flex items-center gap-1 flex-wrap">
+                  {child.actions.map((action, actionIndex) => (
+                    <Badge key={actionIndex} variant="secondary" className="text-xs">
+                      {action.action}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="flex gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onEditCueField(child.id, 'actions')}
+                    className="text-xs h-6 px-2"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Acción
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onExecuteRow(child)}
+                    className="text-xs h-6 px-2"
+                  >
+                    <Play className="h-3 w-3 mr-1" />
+                    Ejecutar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onRemove(child.id)}
+                    className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </td>
+          </tr>
+          )
+          })}
+          {/* Botón para agregar bloques dentro del ITEM cuando está expandido */}
+          {onAddBlockToItem && (
+            <tr className="bg-muted/10">
+              <td colSpan={6} className="border px-2 py-2">
+                <div className="pl-8">
+                  <BlockCreatorCompact onAddBlock={onAddBlockToItem} />
+                </div>
+              </td>
+            </tr>
+          )}
+        </>
+      )}
+    </>
   )
 }
 

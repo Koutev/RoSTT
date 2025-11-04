@@ -149,6 +149,7 @@ export default function ShowPlanner() {
     const totalDuration = calcTotalDuration(allBlocks)
     const calculatedEndTime = calculateEndTime(showStartTime, totalDuration)
     setShowEndTime(calculatedEndTime)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rundown.rows, showStartTime, setShowEndTime])
 
   const executeRow = async (rowId: string) => {
@@ -391,6 +392,8 @@ interface SortableRowProps {
   onExecuteRow: (row: RunOfShowStep) => void
   onToggleItem?: () => void
   onAddBlockToItem?: (step: RunOfShowStep) => void
+  allBlocks?: RundownRow[]
+  blockRealIndex?: number
 }
 
 function SortableRow({ 

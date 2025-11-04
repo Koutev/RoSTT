@@ -89,6 +89,7 @@ export default function Timeline() {
         clearInterval(intervalId)
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showStatus, currentBlockIndex, rundown.rows])
 
   // Reset cuando cambia el bloque actual
@@ -102,6 +103,7 @@ export default function Timeline() {
         setTimeRemaining(durationInSeconds)
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBlockIndex, showStatus, rundown.rows])
 
   // No mostrar si no hay show en ejecución

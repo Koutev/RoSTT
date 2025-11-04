@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useVMixStore, RunOfShowStep } from '@/store/vmix-store'
 import { BLOCK_TEMPLATES, getTemplatesByCategory, BlockTemplate } from '@/data/block-templates'
-import { Plus, ChevronDown, Star, Clock } from 'lucide-react'
+import { Plus, ChevronDown, Star, Clock, X } from 'lucide-react'
 import BlockTemplateManager from '@/components/BlockTemplateManager'
 
 interface BlockCreatorProps {
@@ -70,80 +70,78 @@ export default function BlockCreator({ onAddBlock }: BlockCreatorProps) {
               </Button>
             </div>
 
-            {!showCustomForm ? (
-              <div className="space-y-6">
-                {/* Plantillas predefinidas */}
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <Star className="h-4 w-4 text-primary" />
-                    <h4 className="font-medium text-foreground">Plantillas Predefinidas</h4>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 gap-3">
-                    {allTemplates.map((template) => (
-                      <button
-                        key={template.id}
-                        onClick={() => handleTemplateSelect(template)}
-                        className="flex items-center gap-4 p-4 text-left border border-border rounded-lg hover:bg-muted/50 hover:border-primary/20 transition-all duration-200 group"
-                      >
-                        <div className="text-2xl group-hover:scale-110 transition-transform">
-                          {template.icon}
+            <div className="space-y-6">
+              {/* Plantillas predefinidas */}
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Star className="h-4 w-4 text-primary" />
+                  <h4 className="font-medium text-foreground">Plantillas Predefinidas</h4>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-3">
+                  {allTemplates.map((template) => (
+                    <button
+                      key={template.id}
+                      onClick={() => handleTemplateSelect(template)}
+                      className="flex items-center gap-4 p-4 text-left border border-border rounded-lg hover:bg-muted/50 hover:border-primary/20 transition-all duration-200 group"
+                    >
+                      <div className="text-2xl group-hover:scale-110 transition-transform">
+                        {template.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-foreground group-hover:text-primary transition-colors">
+                          {template.name}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-foreground group-hover:text-primary transition-colors">
-                            {template.name}
-                          </div>
-                          <div className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                            {template.description}
-                          </div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <Badge variant="secondary" className="text-xs">
-                              <Clock className="h-3 w-3 mr-1" />
-                              {template.step.duration || '2:00'}
+                        <div className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                          {template.description}
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge variant="secondary" className="text-xs">
+                            <Clock className="h-3 w-3 mr-1" />
+                            {template.step.duration || '2:00'}
+                          </Badge>
+                          {template.step.actions.length > 0 && (
+                            <Badge variant="outline" className="text-xs">
+                              {template.step.actions.length} acciones
                             </Badge>
-                            {template.step.actions.length > 0 && (
-                              <Badge variant="outline" className="text-xs">
-                                {template.step.actions.length} acciones
-                              </Badge>
-                            )}
-                            {template.category === 'Personalizados' && (
-                              <Badge variant="default" className="text-xs bg-green-100 text-green-800">
-                                Personalizado
-                              </Badge>
-                            )}
-                          </div>
+                          )}
+                          {template.category === 'Personalizados' && (
+                            <Badge variant="default" className="text-xs bg-green-100 text-green-800">
+                              Personalizado
+                            </Badge>
+                          )}
                         </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Separador */}
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-border"></div>
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-background text-muted-foreground">o</span>
-                  </div>
-                </div>
-
-                {/* Botón para crear personalizado */}
-                <div>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setIsOpen(false)
-                      setShowTemplateManager(true)
-                    }}
-                    className="w-full h-12 border-2 border-dashed border-primary/30 hover:border-primary/50 hover:bg-primary/5 transition-all duration-200"
-                  >
-                    <Plus className="h-5 w-5 mr-2" />
-                    <span className="font-medium">Crear Bloque Personalizado</span>
-                  </Button>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
-            )}
+
+              {/* Separador */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-background text-muted-foreground">o</span>
+                </div>
+              </div>
+
+              {/* Botón para crear personalizado */}
+              <div>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsOpen(false)
+                    setShowTemplateManager(true)
+                  }}
+                  className="w-full h-12 border-2 border-dashed border-primary/30 hover:border-primary/50 hover:bg-primary/5 transition-all duration-200"
+                >
+                  <Plus className="h-5 w-5 mr-2" />
+                  <span className="font-medium">Crear Bloque Personalizado</span>
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}
